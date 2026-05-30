@@ -294,18 +294,22 @@ export async function getProducts(filters?: {
   gender?: string;
   featured?: boolean;
 }): Promise<Product[]> {
+  // brandId e status filtrados no servidor — evita baixar produtos de outras marcas
+  const constraints: any[] = [];
+  if (filters?.brandId) constraints.push(where("brandId", "==", filters.brandId));
+  if (filters?.status)  constraints.push(where("status",  "==", filters.status));
+
   const [snap] = await Promise.all([
-    getDocs(collection(db, "products")),
-    getBrands(),
+    getDocs(query(collection(db, "products"), ...constraints)),
+    getBrands(), // popula _brandsCache para getBrandById() nas páginas admin
   ]);
 
   let products = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
 
-  if (filters?.status) products = products.filter((p) => p.status === filters.status);
-  if (filters?.brandId) products = products.filter((p) => p.brandId === filters.brandId);
+  // categoryId, gender e featured filtrados client-side (conjunto já pequeno)
   if (filters?.categoryId) products = products.filter((p) => p.categoryId === filters.categoryId);
-  if (filters?.gender) products = products.filter((p) => p.gender === filters.gender);
-  if (filters?.featured) products = products.filter((p) => p.isFeatured);
+  if (filters?.gender)     products = products.filter((p) => p.gender === filters.gender);
+  if (filters?.featured)   products = products.filter((p) => p.isFeatured);
 
   return products.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
 }
