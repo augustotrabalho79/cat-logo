@@ -7,10 +7,12 @@ import {
   type ReactNode,
 } from "react";
 
+import { firebaseConfig } from "@/lib/firebase";
+
 export type UserRole = "admin" | "vendor";
 export type AuthUser = { uid: string; email: string; role: UserRole; idToken: string };
 
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID as string;
+const PROJECT_ID = firebaseConfig.projectId;
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -21,7 +23,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY as string;
+const API_KEY = firebaseConfig.apiKey;
 const STORAGE_KEY = "auth:user";
 
 // Login via REST API (contorna o SDK que falha com network-request-failed em alguns ambientes)

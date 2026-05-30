@@ -2,16 +2,17 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+// Config pública do Firebase (chaves web são públicas por design,
+// protegidas por Firestore Rules + domínios autorizados)
+export const firebaseConfig = {
+  apiKey: "AIzaSyDC6Fdxj5JGVUx4q266c65ujWPEZM2XkGI",
+  authDomain: "catalogo-69b3a.firebaseapp.com",
+  projectId: "catalogo-69b3a",
+  storageBucket: "catalogo-69b3a.firebasestorage.app",
+  messagingSenderId: "914185303194",
+  appId: "1:914185303194:web:6fcc08a3e49f29ffeedb23",
 };
 
-// Evita dupla inicialização no React StrictMode
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
