@@ -56,7 +56,7 @@ function AdminLayout() {
 
   const nav: NavItem[] = [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-    { to: "/admin/marcas", label: "Marcas", icon: Tag },
+    { to: "/admin/marcas", label: "Marcas", icon: Tag, adminOnly: true },
     { to: "/admin/categorias", label: "Categorias", icon: Layers },
     { to: "/admin/produtos", label: "Produtos", icon: Package, badge: lowStock > 0 ? lowStock : undefined },
     { to: "/admin/usuarios", label: "Usuários", icon: Users, adminOnly: true },

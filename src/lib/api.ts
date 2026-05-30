@@ -10,6 +10,7 @@ import {
   orderBy,
   where,
 } from "firebase/firestore";
+import { cleanForFirestore } from "@/lib/utils";
 import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
@@ -345,7 +346,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 }
 
 export async function saveStoreSettings(data: StoreSettings): Promise<void> {
-  await setDoc(doc(db, "config", "store"), data);
+  await setDoc(doc(db, "config", "store"), cleanForFirestore(data));
 }
 
 // ─── Banners ──────────────────────────────────────────────────────────────────
@@ -359,11 +360,12 @@ export async function getBanners(): Promise<Banner[]> {
 
 export async function saveBanner(data: Partial<Banner>): Promise<string> {
   const { id, ...rest } = data as Banner;
+  const clean = cleanForFirestore(rest);
   if (id) {
-    await setDoc(doc(db, "banners", id), rest, { merge: true });
+    await setDoc(doc(db, "banners", id), clean, { merge: true });
     return id;
   }
-  const ref = await addDoc(collection(db, "banners"), rest);
+  const ref = await addDoc(collection(db, "banners"), clean);
   return ref.id;
 }
 
@@ -380,11 +382,12 @@ export async function getVendors(): Promise<Vendor[]> {
 
 export async function saveVendor(data: Partial<Vendor>): Promise<string> {
   const { id, ...rest } = data as Vendor;
+  const clean = cleanForFirestore(rest);
   if (id) {
-    await setDoc(doc(db, "vendors", id), rest, { merge: true });
+    await setDoc(doc(db, "vendors", id), clean, { merge: true });
     return id;
   }
-  const ref = await addDoc(collection(db, "vendors"), rest);
+  const ref = await addDoc(collection(db, "vendors"), clean);
   return ref.id;
 }
 

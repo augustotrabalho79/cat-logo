@@ -6,6 +6,7 @@ import {
   getBanners, saveBanner, deleteBanner, type Banner, type BannerPosition, bannerPositionLabel,
   getVendors, saveVendor, deleteVendor, type Vendor, type VendorRole,
   getNotificationSettings, saveNotificationSettings, type NotificationSettings,
+  uploadImage,
 } from "@/lib/api";
 import { Btn, Field, TextInput, TextArea, Select } from "@/components/ui-prim";
 import { SlideOver } from "@/components/SlideOver";
@@ -56,18 +57,61 @@ function AdminSettings() {
 function IdentityTab() {
   const [s, setS] = useState<StoreSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | undefined>();
   const [faviconPreview, setFaviconPreview] = useState<string | undefined>();
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
 
-  useEffect(() => { getStoreSettings().then((d) => { setS(d); setLogoPreview(d.logoUrl); setFaviconPreview(d.faviconUrl); }); }, []);
+  useEffect(() => {
+    getStoreSettings().then((d) => {
+      setS(d);
+      setLogoPreview(d.logoUrl);
+      setFaviconPreview(d.faviconUrl);
+    });
+  }, []);
 
   if (!s) return <div className="text-sm text-muted-foreground">Carregando…</div>;
 
+  async function handleLogoUpload(file: File) {
+    setUploadingLogo(true);
+    try {
+      const url = await uploadImage(file, "brand-assets");
+      setLogoPreview(url);
+    } catch {
+      setLogoPreview(URL.createObjectURL(file)); // Fallback preview local
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  async function handleFaviconUpload(file: File) {
+    setUploadingFavicon(true);
+    try {
+      const url = await uploadImage(file, "brand-assets");
+      setFaviconPreview(url);
+    } catch {
+      setFaviconPreview(URL.createObjectURL(file));
+    } finally {
+      setUploadingFavicon(false);
+    }
+  }
+
   async function onSave() {
     if (!s) return;
+    setError("");
+    setSuccess("");
     setSaving(true);
-    await saveStoreSettings({ ...s, logoUrl: logoPreview, faviconUrl: faviconPreview });
-    setSaving(false);
+    try {
+      await saveStoreSettings({ ...s, logoUrl: logoPreview, faviconUrl: faviconPreview });
+      setSuccess("Configurações salvas com sucesso!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: any) {
+      setError(`Erro ao salvar: ${e?.message ?? "tente novamente"}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -80,60 +124,119 @@ function IdentityTab() {
           <TextInput value={s.tagline} onChange={(e) => setS({ ...s, tagline: e.target.value })} />
         </Field>
       </div>
+
       <Field label="Descrição">
         <TextArea value={s.description} onChange={(e) => setS({ ...s, description: e.target.value })} />
       </Field>
+
+      <Field label="WhatsApp para receber pedidos">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">+</span>
+          <TextInput
+            value={(s as any).whatsapp ?? ""}
+            onChange={(e) => setS({ ...s, whatsapp: e.target.value } as any)}
+            placeholder="5581999999999 (com código do país)"
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Número que receberá os pedidos dos clientes via WhatsApp. Inclua código do país (55) e DDD.
+        </p>
+      </Field>
+
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="Logo">
-          <FilePreview preview={logoPreview} onFile={(f) => setLogoPreview(URL.createObjectURL(f))} onClear={() => setLogoPreview(undefined)} hint="PNG ou SVG, fundo transparente" />
+          <FilePreview
+            preview={logoPreview}
+            uploading={uploadingLogo}
+            onFile={handleLogoUpload}
+            onClear={() => setLogoPreview(undefined)}
+            hint="PNG ou SVG, fundo transparente"
+          />
         </Field>
         <Field label="Favicon">
-          <FilePreview preview={faviconPreview} onFile={(f) => setFaviconPreview(URL.createObjectURL(f))} onClear={() => setFaviconPreview(undefined)} hint="32x32px recomendado" />
+          <FilePreview
+            preview={faviconPreview}
+            uploading={uploadingFavicon}
+            onFile={handleFaviconUpload}
+            onClear={() => setFaviconPreview(undefined)}
+            hint="32x32px recomendado"
+          />
         </Field>
       </div>
+
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="Cor primária">
           <div className="flex items-center gap-3">
-            <input type="color" value={s.primaryColor} onChange={(e) => setS({ ...s, primaryColor: e.target.value })} className="h-10 w-16 border border-border bg-background" />
+            <input type="color" value={s.primaryColor} onChange={(e) => setS({ ...s, primaryColor: e.target.value })} className="h-10 w-16 cursor-pointer border border-border bg-background" />
             <TextInput value={s.primaryColor} onChange={(e) => setS({ ...s, primaryColor: e.target.value })} />
           </div>
         </Field>
         <Field label="Cor secundária">
           <div className="flex items-center gap-3">
-            <input type="color" value={s.secondaryColor} onChange={(e) => setS({ ...s, secondaryColor: e.target.value })} className="h-10 w-16 border border-border bg-background" />
+            <input type="color" value={s.secondaryColor} onChange={(e) => setS({ ...s, secondaryColor: e.target.value })} className="h-10 w-16 cursor-pointer border border-border bg-background" />
             <TextInput value={s.secondaryColor} onChange={(e) => setS({ ...s, secondaryColor: e.target.value })} />
           </div>
         </Field>
       </div>
-      <div className="flex justify-end pt-4">
-        <Btn onClick={onSave} disabled={saving}>{saving ? "Salvando…" : "Salvar alterações"}</Btn>
+
+      <div className="flex items-center justify-between pt-4">
+        <div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          {success && <p className="text-xs text-green-600">{success}</p>}
+        </div>
+        <Btn onClick={onSave} disabled={saving || uploadingLogo || uploadingFavicon}>
+          {saving ? "Salvando…" : "Salvar alterações"}
+        </Btn>
       </div>
     </div>
   );
 }
 
-function FilePreview({ preview, onFile, onClear, hint }: { preview?: string; onFile: (f: File) => void; onClear: () => void; hint?: string }) {
+function FilePreview({
+  preview, onFile, onClear, hint, uploading,
+}: {
+  preview?: string;
+  onFile: (f: File) => void;
+  onClear: () => void;
+  hint?: string;
+  uploading?: boolean;
+}) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className="relative">
       <label
         onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) onFile(f); }}
-        className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border bg-background text-xs text-muted-foreground hover:border-foreground"
+        onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !uploading) onFile(f); }}
+        className={`flex h-40 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border bg-background text-xs text-muted-foreground transition hover:border-foreground ${uploading ? "pointer-events-none opacity-60" : ""}`}
       >
-        {preview ? (
-          <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
+        {uploading ? (
+          <>
+            <div className="h-5 w-5 animate-spin border-2 border-border border-t-foreground" />
+            <span>Enviando…</span>
+          </>
+        ) : preview ? (
+          <img src={preview} alt="" className="max-h-full max-w-full object-contain p-2" />
         ) : (
           <>
             <Upload className="h-5 w-5" strokeWidth={1.5} />
             <span>Arraste ou clique para enviar</span>
-            {hint && <span className="text-[10px]">{hint}</span>}
+            {hint && <span className="text-[10px] opacity-70">{hint}</span>}
           </>
         )}
-        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+        <input
+          ref={ref}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        />
       </label>
-      {preview && (
-        <button type="button" onClick={onClear} className="absolute right-2 top-2 border border-border bg-background p-1 hover:border-foreground">
+      {preview && !uploading && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute right-2 top-2 border border-border bg-background p-1 hover:border-foreground"
+        >
           <X className="h-3.5 w-3.5" strokeWidth={1.5} />
         </button>
       )}
