@@ -1,20 +1,17 @@
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
+  createContext, useCallback, useContext,
+  useEffect, useState, type ReactNode,
 } from "react";
 import {
-  signInWithEmailAndPassword,
-  signOut as fbSignOut,
-  onAuthStateChanged,
+  signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+
 export type UserRole = "admin" | "client";
+
 export type AuthUser = {
   uid: string;
   email: string;
@@ -28,11 +25,15 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  isAdmin: boolean;
+  isBrandAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SUPER_ADMIN_EMAIL = "augustocross87@gmail.com";
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 async function fetchUserProfile(uid: string, email: string): Promise<AuthUser> {
   try {
@@ -41,22 +42,25 @@ async function fetchUserProfile(uid: string, email: string): Promise<AuthUser> {
       const data = snap.data();
       return {
         uid,
-        email,
+        email: data.email ?? email,
         role: (data.role as UserRole) ?? "client",
-        name: data.name,
-        brandId: data.brandId,
+        name: data.name ?? undefined,
+        brandId: data.brandId ?? undefined,
       };
     }
   } catch {
-    // Se não conseguir ler Firestore, usa defaults baseado no email
+    // Firestore inacessível — fallback por email
   }
-  // Super admin fallback por email
+
+  // Fallback: super admin identificado pelo email
   return {
     uid,
     email,
     role: email === SUPER_ADMIN_EMAIL ? "admin" : "client",
   };
 }
+
+// ─── PROVIDER ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -65,8 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const profile = await fetchUserProfile(fbUser.uid, fbUser.email!);
-        setUser(profile);
+        try {
+          const profile = await fetchUserProfile(fbUser.uid, fbUser.email!);
+          setUser(profile);
+        } catch {
+          setUser({ uid: fbUser.uid, email: fbUser.email!, role: "client" });
+        }
       } else {
         setUser(null);
       }
@@ -76,7 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
-    // Usa Firebase SDK — necessário para Firestore Rules funcionarem
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const profile = await fetchUserProfile(cred.user.uid, cred.user.email!);
     setUser(profile);
@@ -88,12 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const isAdmin = user?.role === "admin";
+  const isBrandAdmin = user?.role === "client" && !!user?.brandId;
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isBrandAdmin }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ─── HOOK ─────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
   const ctx = useContext(AuthContext);

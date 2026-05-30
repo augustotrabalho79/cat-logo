@@ -26,6 +26,7 @@ import { Route as StoreProdutosSlugRouteImport } from './routes/_store.produtos.
 import { Route as StoreMarcasSlugRouteImport } from './routes/_store.marcas.$slug'
 import { Route as AdminProdutosIdEditarRouteImport } from './routes/admin.produtos.$id.editar'
 import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
+import { Route as CatalogoSlugRouteImport } from './routes/catalogo.$slug'
 
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
@@ -111,6 +112,11 @@ const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => AdminRoute,
 } as any)
+const CatalogoSlugRoute = CatalogoSlugRouteImport.update({
+  id: '/catalogo/$slug',
+  path: '/catalogo/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StoreIndexRoute
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/admin/produtos/': typeof AdminProdutosIndexRoute
   '/admin/produtos/$id/editar': typeof AdminProdutosIdEditarRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/catalogo/$slug': typeof CatalogoSlugRoute
 }
 export interface FileRoutesByTo {
   '/lookbook': typeof StoreLookbookRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/admin/produtos': typeof AdminProdutosIndexRoute
   '/admin/produtos/$id/editar': typeof AdminProdutosIdEditarRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/catalogo/$slug': typeof CatalogoSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -222,11 +230,13 @@ export interface FileRouteTypes {
     | '/admin/produtos/'
     | '/admin/produtos/$id/editar'
     | '/admin/usuarios'
+    | '/catalogo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   StoreRoute: typeof StoreRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  CatalogoSlugRoute: typeof CatalogoSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -350,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsuariosRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/catalogo/$slug': {
+      id: '/catalogo/$slug'
+      path: '/catalogo/$slug'
+      fullPath: '/catalogo/$slug'
+      preLoaderRoute: typeof CatalogoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -402,6 +419,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   StoreRoute: StoreRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  CatalogoSlugRoute: CatalogoSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

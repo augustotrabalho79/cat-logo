@@ -2,69 +2,114 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: verifica se o usuário está autenticado
-    function isAuth() {
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper: verifica se é super admin pelo email
-    function isAdmin() {
-      return isAuth() && request.auth.token.email == "augustocross87@gmail.com";
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == "augustocross87@gmail.com";
     }
 
-    // Helper: verifica se é admin pelo documento do usuário
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isAdminRole() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return isSignedIn() && getUserData().role == "admin";
     }
 
-    // USERS — admin lê tudo, usuário lê o próprio
+    function isBrandAdmin(brandId) {
+      return isSignedIn() &&
+        getUserData().role == "client" &&
+        getUserData().brandId == brandId &&
+        getUserData().active == true;
+    }
+
+    function canManageBrand(brandId) {
+      return isSuperAdmin() || isAdminRole() || isBrandAdmin(brandId);
+    }
+
+    // ─── Users ─────────────────────────────────────────────────────────────────
+    // Super admin gerencia tudo. Usuário lê próprio perfil.
+
     match /users/{uid} {
-      allow read: if isAuth() && (request.auth.uid == uid || isAdmin() || isAdminRole());
-      allow write: if isAdmin() || isAdminRole();
-      // Permite criar o próprio perfil no primeiro login
-      allow create: if isAuth() && request.auth.uid == uid;
+      allow read: if isSignedIn() && (request.auth.uid == uid || isSuperAdmin() || isAdminRole());
+      allow create: if isSuperAdmin() || isAdminRole();
+      allow update: if (isSignedIn() && request.auth.uid == uid) || isSuperAdmin() || isAdminRole();
+      allow delete: if isSuperAdmin() || isAdminRole();
     }
 
-    // BRANDS — leitura pública, escrita só autenticado admin
+    // ─── Brands ────────────────────────────────────────────────────────────────
+    // Leitura pública. Criação/edição: super admin.
+
     match /brands/{brandId} {
       allow read: if true;
-      allow write: if isAuth();  // Qualquer autenticado pode escrever (protegemos por role no app)
+      allow create: if isSuperAdmin() || isAdminRole();
+      allow update: if isSuperAdmin() || isAdminRole() || isBrandAdmin(brandId);
+      allow delete: if isSuperAdmin() || isAdminRole();
     }
 
-    // CATEGORIES — leitura pública, escrita autenticado
-    match /categories/{catId} {
-      allow read: if true;
-      allow write: if isAuth();
-    }
+    // ─── Products ──────────────────────────────────────────────────────────────
+    // Leitura pública. Escrita: admin ou dono da marca.
 
-    // PRODUCTS — leitura pública, escrita autenticado
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAuth();
+      allow create: if isSignedIn() &&
+        (isSuperAdmin() || isAdminRole() ||
+          (getUserData().role == "client" && getUserData().brandId == request.resource.data.brandId));
+      allow update: if isSignedIn() &&
+        (isSuperAdmin() || isAdminRole() ||
+          isBrandAdmin(resource.data.brandId));
+      allow delete: if isSuperAdmin() || isAdminRole() ||
+        (isSignedIn() && isBrandAdmin(resource.data.brandId));
     }
 
-    // BANNERS — leitura pública, escrita autenticado
+    // ─── Categories ────────────────────────────────────────────────────────────
+
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+        (isSuperAdmin() || isAdminRole() ||
+          (getUserData().role == "client" &&
+            (resource == null || getUserData().brandId == resource.data.brandId)));
+    }
+
+    // ─── Banners ───────────────────────────────────────────────────────────────
+
     match /banners/{bannerId} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn() &&
+        (isSuperAdmin() || isAdminRole() ||
+          (getUserData().role == "client" &&
+            (resource == null || getUserData().brandId == resource.data.brandId)));
     }
 
-    // VENDORS — só autenticado
-    match /vendors/{vendorId} {
-      allow read, write: if isAuth();
-    }
+    // ─── Config (store settings, notifications) ────────────────────────────────
 
-    // CONFIG (store settings, notifications) — leitura pública, escrita autenticado
     match /config/{configId} {
       allow read: if true;
-      allow write: if isAuth();
+      allow write: if isSignedIn() && (isSuperAdmin() || isAdminRole());
     }
 
-    // ORDERS — cliente cria, dono da marca lê os próprios
+    // ─── Vendors ───────────────────────────────────────────────────────────────
+
+    match /vendors/{vendorId} {
+      allow read, write: if isSuperAdmin() || isAdminRole();
+    }
+
+    // ─── Orders ────────────────────────────────────────────────────────────────
+    // Qualquer um pode criar pedido (catálogo público). Admin/dono lê e atualiza.
+
     match /orders/{orderId} {
-      allow read: if isAuth();
-      allow create: if true; // Qualquer pessoa pode criar pedido (catálogo público)
-      allow update, delete: if isAuth();
+      allow create: if true;
+      allow read: if isSignedIn() &&
+        (isSuperAdmin() || isAdminRole() ||
+          (resource != null && isBrandAdmin(resource.data.brandId)));
+      allow update, delete: if isSuperAdmin() || isAdminRole() ||
+        (isSignedIn() && resource != null && isBrandAdmin(resource.data.brandId));
     }
   }
 }

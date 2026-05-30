@@ -20,21 +20,32 @@ type NavItem = {
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const lowStock = getLowStockCount(products);
 
-  const isAdmin = user?.role === "admin";
-  const displayEmail = user?.email ?? localStorage.getItem("admin:email") ?? "";
+  const displayEmail = user?.email ?? "";
+
+  // Proteção de rota — redireciona para login se não autenticado
+  useEffect(() => {
+    if (!loading && !user && pathname !== "/admin/login") {
+      navigate({ to: "/admin/login", replace: true });
+    }
+  }, [user, loading, pathname, navigate]);
 
   useEffect(() => {
     try {
       const col = localStorage.getItem("admin:sidebar-collapsed");
       if (col === "1") setCollapsed(true);
     } catch {}
-    getProducts().then(setProducts).catch(console.error);
-  }, []);
+    if (user) {
+      const brandFilter = isAdmin ? undefined : user.brandId;
+      getProducts(brandFilter ? { brandId: brandFilter } : undefined)
+        .then(setProducts)
+        .catch(console.error);
+    }
+  }, [user, isAdmin]);
 
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -44,9 +55,22 @@ function AdminLayout() {
     });
   }
 
-  if (pathname === "/admin/login") {
-    return <Outlet />;
+  if (pathname === "/admin/login") return <Outlet />;
+
+  // Mostra loading enquanto verifica auth
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin border-2 border-border border-t-foreground" />
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Verificando acesso…</p>
+        </div>
+      </div>
+    );
   }
+
+  // Sem usuário — não renderiza nada (redirect já foi disparado)
+  if (!user) return null;
 
   async function handleSignOut() {
     await signOut();

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight } from "lucide-react";
-import { getBrands, saveBrand, deleteBrand, getProducts, type Brand, type Product } from "@/lib/api";
+import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight, Copy, Check } from "lucide-react";
+import { getBrands, saveBrand, deleteBrand, getProducts, uploadImage, type Brand, type Product } from "@/lib/api";
 import { SlideOver } from "@/components/SlideOver";
 import { Btn, Field, TextInput, TextArea } from "@/components/ui-prim";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/admin/marcas")({
   component: AdminBrands,
@@ -25,6 +26,7 @@ const emptyForm: BrandForm = {
 };
 
 function AdminBrands() {
+  const { user } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,11 @@ function AdminBrands() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | undefined>();
+  const [bannerPreview, setBannerPreview] = useState<string | undefined>();
 
   useEffect(() => {
     Promise.all([getBrands(), getProducts()])
@@ -47,6 +54,8 @@ function AdminBrands() {
     setForm(emptyForm);
     setFormError("");
     setFormSuccess("");
+    setLogoPreview(undefined);
+    setBannerPreview(undefined);
     setOpen(true);
   }
 
@@ -56,66 +65,92 @@ function AdminBrands() {
       name: b.name ?? "",
       slug: b.slug ?? "",
       tagline: b.tagline ?? "",
-      description: (b as any).description ?? "",
+      description: b.description ?? "",
       primaryColor: b.primaryColor ?? "#0f0f0f",
       secondaryColor: b.secondaryColor ?? "#e6e4dd",
-      website: (b as any).website ?? "",
-      instagram: (b as any).instagram ?? "",
-      active: (b as any).active !== false,
+      website: b.website ?? "",
+      instagram: b.instagram ?? "",
+      active: b.active !== false,
     });
+    setLogoPreview(b.logoUrl);
+    setBannerPreview(b.bannerUrl);
     setFormError("");
     setFormSuccess("");
     setOpen(true);
   }
 
+  async function handleLogoUpload(file: File) {
+    setUploadingLogo(true);
+    try {
+      const url = await uploadImage(file, "logos");
+      setLogoPreview(url);
+    } catch (e: any) {
+      setFormError(`Erro no upload do logo: ${e.message}`);
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  async function handleBannerUpload(file: File) {
+    setUploadingBanner(true);
+    try {
+      const url = await uploadImage(file, "banners");
+      setBannerPreview(url);
+    } catch (e: any) {
+      setFormError(`Erro no upload do banner: ${e.message}`);
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
+  function copyLink(slug: string) {
+    const url = `${window.location.origin}/catalogo/${slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedSlug(slug);
+      setTimeout(() => setCopiedSlug(null), 2000);
+    });
+  }
+
   async function onSave() {
-    // Validação
     if (!form.name.trim()) { setFormError("Nome da marca é obrigatório."); return; }
     if (!form.slug.trim()) { setFormError("Slug é obrigatório."); return; }
+    if (uploadingLogo || uploadingBanner) { setFormError("Aguarde o upload terminar."); return; }
 
     setFormError("");
     setFormSuccess("");
     setSaving(true);
 
     try {
-      const payload = {
+      const payload: Partial<Brand> & { name: string } = {
         ...form,
         slug: form.slug || slugify(form.name),
         id: editing?.id,
+        logoUrl: logoPreview,
+        bannerUrl: bannerPreview,
       };
-      const savedId = await saveBrand(payload as any);
+      const savedId = await saveBrand(payload, user?.uid);
+
+      const savedBrand: Brand = {
+        id: savedId,
+        ...payload,
+        active: form.active,
+      } as Brand;
 
       if (editing) {
-        // Atualiza na lista
-        setBrands((bs) =>
-          bs.map((b) => b.id === editing.id ? { ...b, ...payload, id: editing.id } : b),
-        );
+        setBrands((bs) => bs.map((b) => b.id === editing.id ? savedBrand : b));
         setFormSuccess("Marca atualizada com sucesso!");
       } else {
-        // Adiciona à lista
-        const newBrand: Brand = {
-          id: savedId,
-          name: form.name,
-          slug: form.slug || slugify(form.name),
-          tagline: form.tagline,
-          primaryColor: form.primaryColor,
-          secondaryColor: form.secondaryColor,
-          ...(form as any),
-        };
-        setBrands((bs) => [newBrand, ...bs]);
+        setBrands((bs) => [savedBrand, ...bs]);
         setFormSuccess("Marca criada com sucesso!");
       }
 
-      setTimeout(() => {
-        setOpen(false);
-        setFormSuccess("");
-      }, 1200);
+      setTimeout(() => { setOpen(false); setFormSuccess(""); }, 1200);
     } catch (err: any) {
       console.error("Erro ao salvar marca:", err);
       if (err?.code === "permission-denied") {
-        setFormError("Sem permissão. Faça login novamente.");
+        setFormError("Sem permissão. Verifique se está logado.");
       } else {
-        setFormError(`Erro ao salvar: ${err?.message ?? "tente novamente"}`);
+        setFormError(`Erro: ${err?.message ?? "tente novamente"}`);
       }
     } finally {
       setSaving(false);
@@ -205,21 +240,34 @@ function AdminBrands() {
                   </div>
                 </div>
                 <div className="absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-between gap-2 border-t border-border bg-background/95 p-3 opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
-                  <button
-                    onClick={() => onToggleActive(b)}
-                    title={isActive ? "Desativar" : "Ativar"}
-                    className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 hover:border-foreground"
-                  >
-                    {isActive
-                      ? <ToggleRight className="h-3.5 w-3.5 text-green-600" strokeWidth={1.5} />
-                      : <ToggleLeft className="h-3.5 w-3.5 text-gray-400" strokeWidth={1.5} />}
-                    <span>{isActive ? "Ativo" : "Inativo"}</span>
-                  </button>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => copyLink(b.slug)}
+                      title="Copiar link público"
+                      className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 hover:border-foreground"
+                    >
+                      {copiedSlug === b.slug
+                        ? <Check className="h-3.5 w-3.5 text-green-600" strokeWidth={1.5} />
+                        : <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />}
+                    </button>
+                    <a
+                      href={`/catalogo/${b.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Ver catálogo"
+                      className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 hover:border-foreground"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </a>
+                  </div>
+                  <div className="flex gap-1.5">
                     <button onClick={() => openEdit(b)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 hover:border-foreground">
                       <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar
                     </button>
-                    <button onClick={() => setConfirmId(b.id)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 text-red-500 hover:border-red-400">
+                    <button onClick={() => onToggleActive(b)} title={isActive ? "Desativar" : "Ativar"} className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 hover:border-foreground">
+                      {isActive ? <ToggleRight className="h-3.5 w-3.5 text-green-600" strokeWidth={1.5} /> : <ToggleLeft className="h-3.5 w-3.5 text-gray-400" strokeWidth={1.5} />}
+                    </button>
+                    <button onClick={() => setConfirmId(b.id)} className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 text-red-500 hover:border-red-400">
                       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </button>
                   </div>
@@ -326,6 +374,29 @@ function AdminBrands() {
             </Field>
           </div>
 
+          {/* Upload Logo */}
+          <Field label="Logo da marca">
+            <UploadArea
+              preview={logoPreview}
+              uploading={uploadingLogo}
+              onFile={handleLogoUpload}
+              onClear={() => setLogoPreview(undefined)}
+              hint="PNG ou SVG com fundo transparente"
+            />
+          </Field>
+
+          {/* Upload Banner */}
+          <Field label="Banner / Capa">
+            <UploadArea
+              preview={bannerPreview}
+              uploading={uploadingBanner}
+              onFile={handleBannerUpload}
+              onClear={() => setBannerPreview(undefined)}
+              hint="Recomendado: 1440x400px"
+              wide
+            />
+          </Field>
+
           <Field label="Website">
             <div className="flex items-center gap-2">
               <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
@@ -361,6 +432,25 @@ function AdminBrands() {
             </button>
           </label>
 
+          {/* Link público */}
+          {form.slug && (
+            <div className="border border-border bg-muted-bg p-3">
+              <p className="label-eyebrow mb-1 text-muted-foreground">Link público do catálogo</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-muted-foreground break-all">
+                  {window.location.origin}/catalogo/{form.slug}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copyLink(form.slug)}
+                  className="shrink-0 border border-border p-1.5 hover:border-foreground"
+                >
+                  <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Preview */}
           {form.name && (
             <div className="border border-border p-4">
@@ -391,6 +481,48 @@ function AdminBrands() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── UploadArea ───────────────────────────────────────────────────────────────
+
+function UploadArea({
+  preview, onFile, onClear, hint, uploading, wide,
+}: {
+  preview?: string;
+  onFile: (f: File) => void;
+  onClear: () => void;
+  hint?: string;
+  uploading?: boolean;
+  wide?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <label
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !uploading) onFile(f); }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border bg-background text-xs text-muted-foreground transition hover:border-foreground ${wide ? "h-32" : "h-24"} ${uploading ? "pointer-events-none opacity-60" : ""}`}
+      >
+        {uploading ? (
+          <>
+            <div className="h-5 w-5 animate-spin border-2 border-border border-t-foreground" />
+            <span>Enviando para Cloudinary…</span>
+          </>
+        ) : preview ? (
+          <img src={preview} alt="" className="max-h-full max-w-full object-contain p-2" />
+        ) : (
+          <>
+            <span className="text-lg">↑</span>
+            <span>Arraste ou clique para enviar</span>
+            {hint && <span className="text-[10px] opacity-70">{hint}</span>}
+          </>
+        )}
+        <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+      </label>
+      {preview && !uploading && (
+        <button type="button" onClick={onClear} className="absolute right-2 top-2 border border-border bg-background p-1 text-xs hover:border-foreground">✕</button>
       )}
     </div>
   );
