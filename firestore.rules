@@ -32,13 +32,21 @@ service cloud.firestore {
       return isSuperAdmin() || isAdminRole() || isBrandAdmin(brandId);
     }
 
+    // Campos privilegiados que apenas super_admin/admin podem alterar.
+    // Um usuário não pode escalar o próprio role mesmo com acesso de escrita ao doc.
+    function selfUpdateAllowed() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['role', 'brandId', 'active', 'createdBy', 'uid']);
+    }
+
     // ─── Users ─────────────────────────────────────────────────────────────────
-    // Super admin gerencia tudo. Usuário lê próprio perfil.
+    // Super admin gerencia tudo. Usuário lê/atualiza campos não-privilegiados do próprio perfil.
 
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isSuperAdmin() || isAdminRole());
       allow create: if isSuperAdmin() || isAdminRole();
-      allow update: if (isSignedIn() && request.auth.uid == uid) || isSuperAdmin() || isAdminRole();
+      allow update: if (isSignedIn() && request.auth.uid == uid && selfUpdateAllowed())
+                    || isSuperAdmin() || isAdminRole();
       allow delete: if isSuperAdmin() || isAdminRole();
     }
 

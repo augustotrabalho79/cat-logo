@@ -13,6 +13,9 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as StoreRouteImport } from './routes/_store'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as StoreIndexRouteImport } from './routes/_store.index'
+import { Route as CatalogoSlugRouteImport } from './routes/catalogo.$slug'
+import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
+import { Route as AdminPedidosRouteImport } from './routes/admin.pedidos'
 import { Route as AdminMarcasRouteImport } from './routes/admin.marcas'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminConfiguracoesRouteImport } from './routes/admin.configuracoes'
@@ -25,8 +28,6 @@ import { Route as AdminProdutosNovoRouteImport } from './routes/admin.produtos.n
 import { Route as StoreProdutosSlugRouteImport } from './routes/_store.produtos.$slug'
 import { Route as StoreMarcasSlugRouteImport } from './routes/_store.marcas.$slug'
 import { Route as AdminProdutosIdEditarRouteImport } from './routes/admin.produtos.$id.editar'
-import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
-import { Route as CatalogoSlugRouteImport } from './routes/catalogo.$slug'
 
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
@@ -46,6 +47,21 @@ const StoreIndexRoute = StoreIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => StoreRoute,
+} as any)
+const CatalogoSlugRoute = CatalogoSlugRouteImport.update({
+  id: '/catalogo/$slug',
+  path: '/catalogo/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPedidosRoute = AdminPedidosRouteImport.update({
+  id: '/pedidos',
+  path: '/pedidos',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminMarcasRoute = AdminMarcasRouteImport.update({
   id: '/marcas',
@@ -107,16 +123,6 @@ const AdminProdutosIdEditarRoute = AdminProdutosIdEditarRouteImport.update({
   path: '/produtos/$id/editar',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => AdminRoute,
-} as any)
-const CatalogoSlugRoute = CatalogoSlugRouteImport.update({
-  id: '/catalogo/$slug',
-  path: '/catalogo/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StoreIndexRoute
@@ -126,6 +132,9 @@ export interface FileRoutesByFullPath {
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
+  '/admin/pedidos': typeof AdminPedidosRoute
+  '/admin/usuarios': typeof AdminUsuariosRoute
+  '/catalogo/$slug': typeof CatalogoSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/marcas/$slug': typeof StoreMarcasSlugRoute
   '/produtos/$slug': typeof StoreProdutosSlugRoute
@@ -134,8 +143,6 @@ export interface FileRoutesByFullPath {
   '/produtos/': typeof StoreProdutosIndexRoute
   '/admin/produtos/': typeof AdminProdutosIndexRoute
   '/admin/produtos/$id/editar': typeof AdminProdutosIdEditarRoute
-  '/admin/usuarios': typeof AdminUsuariosRoute
-  '/catalogo/$slug': typeof CatalogoSlugRoute
 }
 export interface FileRoutesByTo {
   '/lookbook': typeof StoreLookbookRoute
@@ -143,6 +150,9 @@ export interface FileRoutesByTo {
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
+  '/admin/pedidos': typeof AdminPedidosRoute
+  '/admin/usuarios': typeof AdminUsuariosRoute
+  '/catalogo/$slug': typeof CatalogoSlugRoute
   '/': typeof StoreIndexRoute
   '/admin': typeof AdminIndexRoute
   '/marcas/$slug': typeof StoreMarcasSlugRoute
@@ -152,8 +162,6 @@ export interface FileRoutesByTo {
   '/produtos': typeof StoreProdutosIndexRoute
   '/admin/produtos': typeof AdminProdutosIndexRoute
   '/admin/produtos/$id/editar': typeof AdminProdutosIdEditarRoute
-  '/admin/usuarios': typeof AdminUsuariosRoute
-  '/catalogo/$slug': typeof CatalogoSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -164,6 +172,9 @@ export interface FileRoutesById {
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
+  '/admin/pedidos': typeof AdminPedidosRoute
+  '/admin/usuarios': typeof AdminUsuariosRoute
+  '/catalogo/$slug': typeof CatalogoSlugRoute
   '/_store/': typeof StoreIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_store/marcas/$slug': typeof StoreMarcasSlugRoute
@@ -173,7 +184,6 @@ export interface FileRoutesById {
   '/_store/produtos/': typeof StoreProdutosIndexRoute
   '/admin/produtos/': typeof AdminProdutosIndexRoute
   '/admin/produtos/$id/editar': typeof AdminProdutosIdEditarRoute
-  '/admin/usuarios': typeof AdminUsuariosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -185,6 +195,9 @@ export interface FileRouteTypes {
     | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
+    | '/admin/pedidos'
+    | '/admin/usuarios'
+    | '/catalogo/$slug'
     | '/admin/'
     | '/marcas/$slug'
     | '/produtos/$slug'
@@ -193,7 +206,6 @@ export interface FileRouteTypes {
     | '/produtos/'
     | '/admin/produtos/'
     | '/admin/produtos/$id/editar'
-    | '/admin/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/lookbook'
@@ -201,6 +213,9 @@ export interface FileRouteTypes {
     | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
+    | '/admin/pedidos'
+    | '/admin/usuarios'
+    | '/catalogo/$slug'
     | '/'
     | '/admin'
     | '/marcas/$slug'
@@ -210,7 +225,6 @@ export interface FileRouteTypes {
     | '/produtos'
     | '/admin/produtos'
     | '/admin/produtos/$id/editar'
-    | '/admin/usuarios'
   id:
     | '__root__'
     | '/_store'
@@ -220,6 +234,9 @@ export interface FileRouteTypes {
     | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
+    | '/admin/pedidos'
+    | '/admin/usuarios'
+    | '/catalogo/$slug'
     | '/_store/'
     | '/admin/'
     | '/_store/marcas/$slug'
@@ -229,8 +246,6 @@ export interface FileRouteTypes {
     | '/_store/produtos/'
     | '/admin/produtos/'
     | '/admin/produtos/$id/editar'
-    | '/admin/usuarios'
-    | '/catalogo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -268,6 +283,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof StoreIndexRouteImport
       parentRoute: typeof StoreRoute
+    }
+    '/catalogo/$slug': {
+      id: '/catalogo/$slug'
+      path: '/catalogo/$slug'
+      fullPath: '/catalogo/$slug'
+      preLoaderRoute: typeof CatalogoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/usuarios': {
+      id: '/admin/usuarios'
+      path: '/usuarios'
+      fullPath: '/admin/usuarios'
+      preLoaderRoute: typeof AdminUsuariosRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pedidos': {
+      id: '/admin/pedidos'
+      path: '/pedidos'
+      fullPath: '/admin/pedidos'
+      preLoaderRoute: typeof AdminPedidosRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/marcas': {
       id: '/admin/marcas'
@@ -353,20 +389,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProdutosIdEditarRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/usuarios': {
-      id: '/admin/usuarios'
-      path: '/usuarios'
-      fullPath: '/admin/usuarios'
-      preLoaderRoute: typeof AdminUsuariosRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/catalogo/$slug': {
-      id: '/catalogo/$slug'
-      path: '/catalogo/$slug'
-      fullPath: '/catalogo/$slug'
-      preLoaderRoute: typeof CatalogoSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -395,11 +417,12 @@ interface AdminRouteChildren {
   AdminConfiguracoesRoute: typeof AdminConfiguracoesRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminMarcasRoute: typeof AdminMarcasRoute
+  AdminPedidosRoute: typeof AdminPedidosRoute
+  AdminUsuariosRoute: typeof AdminUsuariosRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminProdutosNovoRoute: typeof AdminProdutosNovoRoute
   AdminProdutosIndexRoute: typeof AdminProdutosIndexRoute
   AdminProdutosIdEditarRoute: typeof AdminProdutosIdEditarRoute
-  AdminUsuariosRoute: typeof AdminUsuariosRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -407,11 +430,12 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminConfiguracoesRoute: AdminConfiguracoesRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminMarcasRoute: AdminMarcasRoute,
+  AdminPedidosRoute: AdminPedidosRoute,
+  AdminUsuariosRoute: AdminUsuariosRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminProdutosNovoRoute: AdminProdutosNovoRoute,
   AdminProdutosIndexRoute: AdminProdutosIndexRoute,
   AdminProdutosIdEditarRoute: AdminProdutosIdEditarRoute,
-  AdminUsuariosRoute: AdminUsuariosRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
