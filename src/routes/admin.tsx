@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { LayoutDashboard, Tag, Layers, Package, LogOut, Settings2, ChevronLeft, ChevronRight } from "lucide-react";
-import { signOut, getLowStockCount } from "@/lib/api";
+import { signOut, getLowStockCount, getProducts, type Product } from "@/lib/api";
 
 export const Route = createFileRoute("/admin")({
   component: AdminLayout,
@@ -20,7 +20,8 @@ function AdminLayout() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("admin@casabranca.com");
   const [collapsed, setCollapsed] = useState(false);
-  const lowStock = getLowStockCount();
+  const [products, setProducts] = useState<Product[]>([]);
+  const lowStock = getLowStockCount(products);
 
   useEffect(() => {
     try {
@@ -29,6 +30,7 @@ function AdminLayout() {
       const col = localStorage.getItem("admin:sidebar-collapsed");
       if (col === "1") setCollapsed(true);
     } catch {}
+    getProducts().then(setProducts).catch(console.error);
   }, []);
 
   function toggleCollapsed() {

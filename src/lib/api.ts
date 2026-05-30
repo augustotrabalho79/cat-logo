@@ -1,15 +1,22 @@
-// API real — Firebase Firestore + Cloudinary
 import {
-  collection, doc, getDocs, addDoc, updateDoc, setDoc,
-  deleteDoc, query, where, orderBy, serverTimestamp,
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  setDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  where,
 } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
 } from "firebase/auth";
-import { auth, db } from "./firebase";
+import { auth, db } from "@/lib/firebase";
 
-// ─── TIPOS ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Brand = {
   id: string;
@@ -19,18 +26,17 @@ export type Brand = {
   primaryColor: string;
   secondaryColor?: string;
   description?: string;
-  logoUrl?: string;
-  bannerUrl?: string;
 };
 
 export type Variant = {
-  id?: string;
   size: string;
   colorName: string;
   color: string;
   sku: string;
   stock: number;
 };
+
+export type ProductStatus = "publicado" | "rascunho" | "esgotado";
 
 export type Product = {
   id: string;
@@ -39,7 +45,7 @@ export type Product = {
   brandId: string;
   basePrice: number;
   salePrice: number | null;
-  status: "publicado" | "rascunho" | "esgotado";
+  status: ProductStatus;
   isNew: boolean;
   isFeatured?: boolean;
   gender: "masculino" | "feminino" | "unissex" | "infantil";
@@ -59,184 +65,6 @@ export type Category = {
   order: number;
 };
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
-
-export function formatBRL(value: number): string {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-export function getBrandById(id: string, brands: Brand[]): Brand | undefined {
-  return brands.find((b) => b.id === id);
-}
-
-function docToObj<T>(d: any): T {
-  return { id: d.id, ...d.data() } as T;
-}
-
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-
-export async function signIn(email: string, password: string): Promise<void> {
-  await signInWithEmailAndPassword(auth, email, password);
-}
-
-export async function signOut(): Promise<void> {
-  await fbSignOut(auth);
-}
-
-// ─── BRANDS ───────────────────────────────────────────────────────────────────
-
-export async function getBrands(): Promise<Brand[]> {
-  const snap = await getDocs(collection(db, "brands"));
-  return snap.docs.map((d) => docToObj<Brand>(d));
-}
-
-export async function saveBrand(data: Partial<Brand> & { id?: string }): Promise<string> {
-  const { id, ...rest } = data;
-  const payload = { ...rest, updatedAt: serverTimestamp() };
-  if (id) {
-    await updateDoc(doc(db, "brands", id), payload);
-    return id;
-  }
-  const ref = await addDoc(collection(db, "brands"), {
-    ...payload,
-    createdAt: serverTimestamp(),
-  });
-  return ref.id;
-}
-
-export async function deleteBrand(id: string): Promise<void> {
-  await deleteDoc(doc(db, "brands", id));
-}
-
-// ─── CATEGORIES ───────────────────────────────────────────────────────────────
-
-export async function getCategories(): Promise<Category[]> {
-  const snap = await getDocs(query(collection(db, "categories"), orderBy("order")));
-  return snap.docs.map((d) => docToObj<Category>(d));
-}
-
-export async function saveCategory(data: Partial<Category> & { id?: string }): Promise<string> {
-  const { id, ...rest } = data;
-  const payload = { ...rest, updatedAt: serverTimestamp() };
-  if (id) {
-    await updateDoc(doc(db, "categories", id), payload);
-    return id;
-  }
-  const ref = await addDoc(collection(db, "categories"), {
-    ...payload,
-    createdAt: serverTimestamp(),
-  });
-  return ref.id;
-}
-
-export async function deleteCategory(id: string): Promise<void> {
-  await deleteDoc(doc(db, "categories", id));
-}
-
-// ─── PRODUCTS ─────────────────────────────────────────────────────────────────
-
-export async function getProducts(filters?: {
-  status?: string;
-  brandId?: string;
-  categoryId?: string;
-  gender?: string;
-}): Promise<Product[]> {
-  const constraints: any[] = [];
-  if (filters?.status) constraints.push(where("status", "==", filters.status));
-  if (filters?.brandId) constraints.push(where("brandId", "==", filters.brandId));
-  if (filters?.categoryId) constraints.push(where("categoryId", "==", filters.categoryId));
-  if (filters?.gender) constraints.push(where("gender", "==", filters.gender));
-  constraints.push(orderBy("createdAt", "desc"));
-
-  const snap = await getDocs(query(collection(db, "products"), ...constraints));
-
-  const products = await Promise.all(
-    snap.docs.map(async (d) => {
-      const product = docToObj<Product>(d);
-      // carregar variantes da subcoleção
-      const varSnap = await getDocs(collection(db, "products", d.id, "variants"));
-      product.variants = varSnap.docs.map((v) => docToObj<Variant>(v));
-      return product;
-    })
-  );
-  return products;
-}
-
-export async function getProductBySlug(slug: string): Promise<Product | undefined> {
-  const q = query(collection(db, "products"), where("slug", "==", slug));
-  const snap = await getDocs(q);
-  if (snap.empty) return undefined;
-  const d = snap.docs[0];
-  const product = docToObj<Product>(d);
-  const varSnap = await getDocs(collection(db, "products", d.id, "variants"));
-  product.variants = varSnap.docs.map((v) => docToObj<Variant>(v));
-  return product;
-}
-
-export async function saveProduct(data: Partial<Product> & { id?: string }): Promise<string> {
-  const { id, variants, ...rest } = data;
-  const payload = { ...rest, updatedAt: serverTimestamp() };
-
-  let productId = id;
-  if (productId) {
-    await updateDoc(doc(db, "products", productId), payload);
-  } else {
-    const ref = await addDoc(collection(db, "products"), {
-      ...payload,
-      createdAt: serverTimestamp(),
-      views: 0,
-    });
-    productId = ref.id;
-  }
-
-  // salvar variantes na subcoleção
-  if (variants && productId) {
-    const varRef = collection(db, "products", productId, "variants");
-    // deletar antigas e recriar
-    const existing = await getDocs(varRef);
-    await Promise.all(existing.docs.map((d) => deleteDoc(d.ref)));
-    await Promise.all(
-      variants.map((v) => addDoc(varRef, { ...v, updatedAt: serverTimestamp() }))
-    );
-  }
-
-  return productId!;
-}
-
-export async function deleteProduct(id: string): Promise<void> {
-  await deleteDoc(doc(db, "products", id));
-}
-
-// ─── UPLOAD (Cloudinary) ──────────────────────────────────────────────────────
-
-export async function uploadImage(
-  file: File,
-  folder: "brand-assets" | "product-images"
-): Promise<string> {
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-
-  const form = new FormData();
-  form.append("file", file);
-  form.append("upload_preset", preset);
-  form.append("folder", folder);
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-    { method: "POST", body: form }
-  );
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message ?? "Erro no upload");
-  }
-
-  const data = await res.json();
-  return data.secure_url as string;
-}
-
-// ─── TIPOS NOVOS ──────────────────────────────────────────────────────────────
-
 export type StoreSettings = {
   name: string;
   tagline: string;
@@ -245,9 +73,39 @@ export type StoreSettings = {
   faviconUrl?: string;
   primaryColor: string;
   secondaryColor: string;
+  whatsapp: string;
+  primaryBg: string;
+  primaryText: string;
+  borderColor: string;
+  accentColor: string;
+  promoColor: string;
 };
 
-export type BannerPosition = "hero" | "novidades" | "entre-categorias" | "rodape" | "lateral";
+export const defaultTheme = {
+  primaryBg: "#fafaf7",
+  primaryText: "#0f0f0f",
+  borderColor: "#e6e4dd",
+  accentColor: "#0f0f0f",
+  promoColor: "#16a34a",
+};
+
+const defaultStoreSettings: StoreSettings = {
+  name: "Casa Branca",
+  tagline: "Curadoria de moda atemporal",
+  description:
+    "Casa Branca reúne marcas brasileiras autorais com foco em peças minimalistas e duradouras.",
+  primaryColor: "#0f0f0f",
+  secondaryColor: "#e6e4dd",
+  whatsapp: "5581999999999",
+  ...defaultTheme,
+};
+
+export type BannerPosition =
+  | "hero"
+  | "novidades"
+  | "entre-categorias"
+  | "rodape"
+  | "lateral";
 
 export type Banner = {
   id: string;
@@ -290,43 +148,222 @@ export type NotificationSettings = {
   email: string;
 };
 
-// ─── STORE SETTINGS ───────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const SETTINGS_DOC = "config/store";
+export function formatBRL(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export function getProductStock(p: Product): number {
+  return (p.variants ?? []).reduce((sum, v) => sum + (v.stock || 0), 0);
+}
+
+export function getLowStockCount(products: Product[], threshold = 5): number {
+  return products.filter((p) => {
+    const stock = getProductStock(p);
+    return stock > 0 && stock <= threshold;
+  }).length;
+}
+
+export function computeProductStatus(
+  variants: Variant[],
+  current: ProductStatus = "publicado",
+): ProductStatus {
+  const totalStock = (variants ?? []).reduce((s, v) => s + (v.stock || 0), 0);
+  if (totalStock === 0) return "esgotado";
+  if (current === "esgotado") return "publicado";
+  return current;
+}
+
+export function isStockControlled(
+  variants: Variant[] | undefined,
+  status: ProductStatus,
+): boolean {
+  if (!variants || variants.length === 0) return false;
+  const total = variants.reduce((s, v) => s + (v.stock || 0), 0);
+  return total === 0 || status === "esgotado";
+}
+
+// ─── Brand cache (synchronous getBrandById for components) ───────────────────
+
+let _brandsCache: Brand[] = [];
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export async function signIn(email: string, password: string): Promise<void> {
+  await signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function signOut(): Promise<void> {
+  await fbSignOut(auth);
+}
+
+// ─── Brands ───────────────────────────────────────────────────────────────────
+
+export async function getBrands(): Promise<Brand[]> {
+  const snap = await getDocs(collection(db, "brands"));
+  _brandsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Brand);
+  return _brandsCache;
+}
+
+export function getBrandById(id: string): Brand | undefined {
+  return _brandsCache.find((b) => b.id === id);
+}
+
+export async function saveBrand(
+  data: Partial<Brand> & { name: string },
+): Promise<string> {
+  const { id, ...rest } = data as Brand;
+  if (id) {
+    await setDoc(doc(db, "brands", id), rest, { merge: true });
+    _brandsCache = _brandsCache.map((b) =>
+      b.id === id ? { ...b, ...rest } : b,
+    );
+    return id;
+  }
+  const ref = await addDoc(collection(db, "brands"), rest);
+  _brandsCache = [..._brandsCache, { id: ref.id, ...rest }];
+  return ref.id;
+}
+
+export async function deleteBrand(id: string): Promise<void> {
+  await deleteDoc(doc(db, "brands", id));
+  _brandsCache = _brandsCache.filter((b) => b.id !== id);
+}
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+export async function getCategories(): Promise<Category[]> {
+  const snap = await getDocs(
+    query(collection(db, "categories"), orderBy("order")),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Category);
+}
+
+export async function saveCategory(data: Partial<Category>): Promise<string> {
+  const { id, ...rest } = data as Category;
+  if (id) {
+    await setDoc(doc(db, "categories", id), rest, { merge: true });
+    return id;
+  }
+  const ref = await addDoc(collection(db, "categories"), rest);
+  return ref.id;
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  await deleteDoc(doc(db, "categories", id));
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+
+export async function getProducts(filters?: {
+  status?: ProductStatus;
+  brandId?: string;
+  categoryId?: string;
+  gender?: string;
+  featured?: boolean;
+}): Promise<Product[]> {
+  // Load brands in parallel to warm the synchronous cache
+  const [snap] = await Promise.all([
+    getDocs(collection(db, "products")),
+    getBrands(),
+  ]);
+
+  let products = snap.docs.map(
+    (d) => ({ id: d.id, ...d.data() }) as Product,
+  );
+
+  if (filters?.status)
+    products = products.filter((p) => p.status === filters.status);
+  if (filters?.brandId)
+    products = products.filter((p) => p.brandId === filters.brandId);
+  if (filters?.categoryId)
+    products = products.filter((p) => p.categoryId === filters.categoryId);
+  if (filters?.gender)
+    products = products.filter((p) => p.gender === filters.gender);
+  if (filters?.featured) products = products.filter((p) => p.isFeatured);
+
+  // Featured products appear first
+  return products.sort(
+    (a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0),
+  );
+}
+
+export async function getProductBySlug(
+  slug: string,
+): Promise<Product | undefined> {
+  const snap = await getDocs(
+    query(collection(db, "products"), where("slug", "==", slug)),
+  );
+  if (snap.empty) return undefined;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() } as Product;
+}
+
+export async function saveProduct(data: Partial<Product>): Promise<string> {
+  const { id, ...rest } = data as Product;
+  rest.status = computeProductStatus(rest.variants ?? [], rest.status);
+  if (id) {
+    await setDoc(doc(db, "products", id), rest, { merge: true });
+    return id;
+  }
+  const ref = await addDoc(collection(db, "products"), rest);
+  return ref.id;
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  await deleteDoc(doc(db, "products", id));
+}
+
+// ─── Image Upload (Cloudinary) ────────────────────────────────────────────────
+
+export async function uploadImage(file: File, folder: string): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append(
+    "upload_preset",
+    import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+  );
+  formData.append("folder", folder);
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+    { method: "POST", body: formData },
+  );
+  const json = await res.json();
+  if (!json.secure_url)
+    throw new Error(json.error?.message ?? "Falha no upload da imagem");
+  return json.secure_url as string;
+}
+
+// ─── Store Settings ───────────────────────────────────────────────────────────
 
 export async function getStoreSettings(): Promise<StoreSettings> {
-  try {
-    const snap = await getDocs(collection(db, "config"));
-    const d = snap.docs.find((x) => x.id === "store");
-    if (d) return d.data() as StoreSettings;
-  } catch {}
-  return {
-    name: "Casa Branca",
-    tagline: "Curadoria de moda atemporal",
-    description: "Casa Branca reúne marcas brasileiras autorais.",
-    primaryColor: "#0f0f0f",
-    secondaryColor: "#e6e4dd",
-  };
+  const snap = await getDoc(doc(db, "config", "store"));
+  if (!snap.exists()) return defaultStoreSettings;
+  return { ...defaultStoreSettings, ...snap.data() } as StoreSettings;
 }
 
 export async function saveStoreSettings(data: StoreSettings): Promise<void> {
-  await setDoc(doc(db, "config", "store"), { ...data, updatedAt: serverTimestamp() });
+  await setDoc(doc(db, "config", "store"), data);
 }
 
-// ─── BANNERS ──────────────────────────────────────────────────────────────────
+// ─── Banners ──────────────────────────────────────────────────────────────────
 
 export async function getBanners(): Promise<Banner[]> {
-  const snap = await getDocs(query(collection(db, "banners"), orderBy("order")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Banner));
+  const snap = await getDocs(
+    query(collection(db, "banners"), orderBy("order")),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Banner);
 }
 
-export async function saveBanner(data: Partial<Banner> & { id?: string }): Promise<string> {
-  const { id, ...rest } = data;
+export async function saveBanner(data: Partial<Banner>): Promise<string> {
+  const { id, ...rest } = data as Banner;
   if (id) {
-    await updateDoc(doc(db, "banners", id), { ...rest, updatedAt: serverTimestamp() });
+    await setDoc(doc(db, "banners", id), rest, { merge: true });
     return id;
   }
-  const ref = await addDoc(collection(db, "banners"), { ...rest, createdAt: serverTimestamp() });
+  const ref = await addDoc(collection(db, "banners"), rest);
   return ref.id;
 }
 
@@ -334,20 +371,20 @@ export async function deleteBanner(id: string): Promise<void> {
   await deleteDoc(doc(db, "banners", id));
 }
 
-// ─── VENDORS ──────────────────────────────────────────────────────────────────
+// ─── Vendors ──────────────────────────────────────────────────────────────────
 
 export async function getVendors(): Promise<Vendor[]> {
   const snap = await getDocs(collection(db, "vendors"));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Vendor));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Vendor);
 }
 
-export async function saveVendor(data: Partial<Vendor> & { id?: string }): Promise<string> {
-  const { id, ...rest } = data;
+export async function saveVendor(data: Partial<Vendor>): Promise<string> {
+  const { id, ...rest } = data as Vendor;
   if (id) {
-    await updateDoc(doc(db, "vendors", id), { ...rest, updatedAt: serverTimestamp() });
+    await setDoc(doc(db, "vendors", id), rest, { merge: true });
     return id;
   }
-  const ref = await addDoc(collection(db, "vendors"), { ...rest, createdAt: serverTimestamp() });
+  const ref = await addDoc(collection(db, "vendors"), rest);
   return ref.id;
 }
 
@@ -355,33 +392,27 @@ export async function deleteVendor(id: string): Promise<void> {
   await deleteDoc(doc(db, "vendors", id));
 }
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+// ─── Notification Settings ────────────────────────────────────────────────────
+
+const defaultNotificationSettings: NotificationSettings = {
+  onNewOrder: true,
+  onOutOfStock: true,
+  onLowStock: false,
+  lowStockThreshold: 5,
+  email: "",
+};
 
 export async function getNotificationSettings(): Promise<NotificationSettings> {
-  try {
-    const snap = await getDocs(collection(db, "config"));
-    const d = snap.docs.find((x) => x.id === "notifications");
-    if (d) return d.data() as NotificationSettings;
-  } catch {}
+  const snap = await getDoc(doc(db, "config", "notifications"));
+  if (!snap.exists()) return defaultNotificationSettings;
   return {
-    onNewOrder: true,
-    onOutOfStock: true,
-    onLowStock: false,
-    lowStockThreshold: 5,
-    email: "",
-  };
+    ...defaultNotificationSettings,
+    ...snap.data(),
+  } as NotificationSettings;
 }
 
-export async function saveNotificationSettings(data: NotificationSettings): Promise<void> {
-  await setDoc(doc(db, "config", "notifications"), { ...data, updatedAt: serverTimestamp() });
-}
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-
-export function getProductStock(p: Product): number {
-  return (p.variants ?? []).reduce((sum, v) => sum + (v.stock || 0), 0);
-}
-
-export function getLowStockCount(threshold = 5): number {
-  return 0; // calculado dinamicamente via Firestore em produção
+export async function saveNotificationSettings(
+  data: NotificationSettings,
+): Promise<void> {
+  await setDoc(doc(db, "config", "notifications"), data);
 }
