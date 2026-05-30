@@ -42,7 +42,6 @@ function UsuariosPage() {
         const adminDoc = u.find((x) => x.uid === user.uid);
         if (adminDoc && (!adminDoc.email || !adminDoc.name)) {
           await updateClientUser(user.uid, {
-            email: user.email,
             name: user.name || "Administrador",
             role: "admin",
             active: true,

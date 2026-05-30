@@ -32,7 +32,6 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [brandId, setBrandId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [gender, setGender] = useState<Product["gender"]>("unissex");
-  const [season, setSeason] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [basePrice, setBasePrice] = useState<number | "">("");
@@ -97,7 +96,7 @@ export function ProductForm({ productId }: { productId?: string }) {
   async function save(nextStatus?: Status) {
     const finalStatus = nextStatus ?? status;
     await saveProduct({
-      id: productId, name, slug, description, brandId, categoryId, gender, season, tags,
+      id: productId, name, slug, description, brandId, categoryId, gender, tags,
       basePrice: Number(basePrice) || 0, salePrice: salePrice === "" ? null : Number(salePrice),
       images, variants, status: finalStatus, isNew, isFeatured,
     });
@@ -148,9 +147,6 @@ export function ProductForm({ productId }: { productId?: string }) {
                 </Select>
               </Field>
             </div>
-            <Field label="Estação">
-              <TextInput value={season} onChange={(e) => setSeason(e.target.value)} placeholder="Outono / Inverno 2026" />
-            </Field>
             <Field label="Tags (separe por vírgula)">
               <div className="flex gap-2">
                 <TextInput
