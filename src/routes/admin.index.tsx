@@ -23,7 +23,7 @@ function Dashboard() {
 
   useEffect(() => {
     const promises: Promise<any>[] = [
-      getProducts().then(setProducts),
+      getProducts(isAdmin ? undefined : { brandId: user?.brandId }).then(setProducts),
       getBrands().then(setBrands),
     ];
     if (isAdmin) {

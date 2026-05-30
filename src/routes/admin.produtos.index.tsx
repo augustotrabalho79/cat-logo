@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { getProducts, deleteProduct, saveProduct, getBrandById, getProductStock, formatBRL, type Product } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/admin/produtos/")({
   component: AdminProdutos,
@@ -30,11 +31,14 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
 }
 
 function AdminProdutos() {
+  const { user, isAdmin } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => { getProducts().then(setProducts); }, []);
+  useEffect(() => {
+    getProducts(isAdmin ? undefined : { brandId: user?.brandId }).then(setProducts);
+  }, [isAdmin, user?.brandId]);
 
   const filtered = useMemo(
     () => (tab === "todos" ? products : products.filter((p) => p.status === tab)),
