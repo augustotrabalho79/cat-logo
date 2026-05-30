@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { firebaseConfig } from "@/lib/firebase";
+import { cleanForFirestore } from "@/lib/utils";
 
 export type ClientUser = {
   uid: string;
@@ -101,8 +102,10 @@ export async function updateClientUser(
   uid: string,
   data: Partial<Omit<ClientUser, "uid" | "email" | "createdAt">>,
 ): Promise<void> {
+  // cleanForFirestore remove campos undefined — Firestore rejeita undefined
+  const clean = cleanForFirestore(data);
   await updateDoc(doc(db, "users", uid), {
-    ...data,
+    ...clean,
     updatedAt: serverTimestamp(),
   });
 }

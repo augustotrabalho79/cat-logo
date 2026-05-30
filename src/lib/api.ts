@@ -207,7 +207,8 @@ export async function getBrandBySlug(slug: string): Promise<Brand | null> {
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
-  return { id: d.id, ...d.data() } as Brand;
+  // Normaliza active: campo ausente em marcas antigas = tratar como ativo
+  return { active: true, id: d.id, ...d.data() } as Brand;
 }
 
 export function getBrandById(id: string): Brand | undefined {
@@ -344,33 +345,9 @@ export async function deleteProduct(id: string): Promise<void> {
 }
 
 // ─── CLOUDINARY UPLOAD ────────────────────────────────────────────────────────
+// Delega para o cloudinaryService dedicado
 
-const CLOUDINARY_CLOUD_NAME = "doitoloq3";
-const CLOUDINARY_UPLOAD_PRESET = "catalogo_unsigned";
-
-export async function uploadImage(file: File, folder: string): Promise<string> {
-  // Valida arquivo antes de enviar
-  if (!file.type.startsWith("image/")) throw new Error("Arquivo deve ser uma imagem.");
-  if (file.size > 10 * 1024 * 1024) throw new Error("Imagem muito grande (máx 10MB).");
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-  formData.append("folder", `catalogo-saas/${folder}`);
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-    { method: "POST", body: formData },
-  );
-  const json = await res.json();
-
-  if (!res.ok || !json.secure_url) {
-    throw new Error(json.error?.message ?? "Falha no upload. Verifique o preset do Cloudinary.");
-  }
-
-  // Retorna APENAS a secure_url (nunca blob:)
-  return json.secure_url as string;
-}
+export { uploadImageUrl as uploadImage } from "@/services/cloudinaryService";
 
 // ─── STORE SETTINGS (global) ─────────────────────────────────────────────────
 

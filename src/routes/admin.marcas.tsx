@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight, Copy, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight, Copy, Check, Phone } from "lucide-react";
 import { getBrands, saveBrand, deleteBrand, getProducts, uploadImage, type Brand, type Product } from "@/lib/api";
 import { SlideOver } from "@/components/SlideOver";
 import { Btn, Field, TextInput, TextArea } from "@/components/ui-prim";
@@ -16,13 +16,13 @@ const slugify = (s: string) =>
 type BrandForm = {
   name: string; slug: string; tagline: string; description: string;
   primaryColor: string; secondaryColor: string;
-  website: string; instagram: string; active: boolean;
+  website: string; instagram: string; whatsapp: string; active: boolean;
 };
 
 const emptyForm: BrandForm = {
   name: "", slug: "", tagline: "", description: "",
   primaryColor: "#0f0f0f", secondaryColor: "#e6e4dd",
-  website: "", instagram: "", active: true,
+  website: "", instagram: "", whatsapp: "", active: true,
 };
 
 function AdminBrands() {
@@ -70,6 +70,7 @@ function AdminBrands() {
       secondaryColor: b.secondaryColor ?? "#e6e4dd",
       website: b.website ?? "",
       instagram: b.instagram ?? "",
+      whatsapp: b.whatsapp ?? "",
       active: b.active !== false,
     });
     setLogoPreview(b.logoUrl);
@@ -417,6 +418,21 @@ function AdminBrands() {
                 placeholder="@marca"
               />
             </div>
+          </Field>
+
+          <Field label="WhatsApp (com DDD, sem +55)">
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+              <TextInput
+                type="tel"
+                value={form.whatsapp}
+                onChange={(e) => setForm({ ...form, whatsapp: e.target.value.replace(/\D/g, "") })}
+                placeholder="81999999999"
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Usado no botão "Pedir via WhatsApp" do catálogo público.
+            </p>
           </Field>
 
           <label className="flex items-center justify-between border border-border px-4 py-3 cursor-pointer">

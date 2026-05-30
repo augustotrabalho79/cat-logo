@@ -34,7 +34,9 @@ function CatalogPage() {
   useEffect(() => {
     async function load() {
       const b = await getBrandBySlug(slug);
-      if (!b || !b.active) { setNotFound(true); setLoading(false); return; }
+      // active === false: marca explicitamente desativada pelo admin
+      // active undefined: marca antiga sem campo → tratar como ativa
+      if (!b || b.active === false) { setNotFound(true); setLoading(false); return; }
       setBrand(b);
       const [prods, cats] = await Promise.all([
         getProducts({ brandId: b.id, status: "publicado" }),
