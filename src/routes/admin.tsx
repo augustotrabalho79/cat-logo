@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Tag, Layers, Package, LogOut, Settings2, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { LayoutDashboard, Tag, Layers, Package, LogOut, Settings2, ChevronLeft, ChevronRight, Users, ShoppingBag } from "lucide-react";
 import { signOut, getLowStockCount, getProducts, type Product } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 type NavItem = {
-  to: "/admin" | "/admin/marcas" | "/admin/categorias" | "/admin/produtos" | "/admin/configuracoes" | "/admin/usuarios";
+  to: "/admin" | "/admin/marcas" | "/admin/categorias" | "/admin/produtos" | "/admin/configuracoes" | "/admin/usuarios" | "/admin/pedidos";
   label: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
@@ -83,6 +83,7 @@ function AdminLayout() {
     { to: "/admin/marcas", label: "Marcas", icon: Tag, adminOnly: true },
     { to: "/admin/categorias", label: "Categorias", icon: Layers },
     { to: "/admin/produtos", label: "Produtos", icon: Package, badge: lowStock > 0 ? lowStock : undefined },
+    { to: "/admin/pedidos", label: "Pedidos", icon: ShoppingBag },
     { to: "/admin/usuarios", label: "Usuários", icon: Users, adminOnly: true },
   ];
 
