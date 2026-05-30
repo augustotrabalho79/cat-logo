@@ -25,14 +25,15 @@ function AdminLogin() {
       navigate({ to: user.role === "admin" ? "/admin" : "/" });
     } catch (err: any) {
       console.error("Login error:", err?.code, err?.message);
-      if (err?.code === "auth/invalid-credential" || err?.code === "auth/wrong-password" || err?.code === "auth/user-not-found") {
+      const code = err?.code ?? "";
+      if (code.includes("INVALID_PASSWORD") || code.includes("EMAIL_NOT_FOUND") || code.includes("INVALID_LOGIN_CREDENTIALS")) {
         setError("E-mail ou senha inválidos.");
-      } else if (err?.code === "auth/too-many-requests") {
+      } else if (code.includes("TOO_MANY_ATTEMPTS")) {
         setError("Muitas tentativas. Aguarde alguns minutos.");
-      } else if (err?.code === "auth/network-request-failed") {
-        setError("Erro de conexão. Verifique sua internet.");
+      } else if (code.includes("USER_DISABLED")) {
+        setError("Usuário desativado.");
       } else {
-        setError(`Erro: ${err?.code ?? err?.message ?? "desconhecido"}`);
+        setError(`Erro: ${code || err?.message || "desconhecido"}`);
       }
     } finally {
       setLoading(false);

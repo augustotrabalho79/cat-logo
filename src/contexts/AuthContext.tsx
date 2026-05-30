@@ -6,16 +6,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  signInWithEmailAndPassword,
-  signOut as fbSignOut,
-  onAuthStateChanged,
-} from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
 
 export type UserRole = "admin" | "vendor";
-export type AuthUser = { uid: string; email: string; role: UserRole };
+export type AuthUser = { uid: string; email: string; role: UserRole; idToken: string };
+
+const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID as string;
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -26,9 +21,41 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchRole(uid: string): Promise<UserRole> {
-  const snap = await getDoc(doc(db, "users", uid));
-  return (snap.data()?.role as UserRole) ?? "vendor";
+const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY as string;
+const STORAGE_KEY = "auth:user";
+
+// Login via REST API (contorna o SDK que falha com network-request-failed em alguns ambientes)
+async function restSignIn(email: string, password: string) {
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    const code = data?.error?.message ?? "UNKNOWN";
+    const err = new Error(code) as Error & { code: string };
+    err.code = code;
+    throw err;
+  }
+  return { uid: data.localId as string, email: data.email as string, idToken: data.idToken as string };
+}
+
+async function fetchRole(uid: string, idToken: string): Promise<UserRole> {
+  try {
+    const res = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`,
+      { headers: { Authorization: `Bearer ${idToken}` } },
+    );
+    if (!res.ok) return "vendor";
+    const data = await res.json();
+    return (data?.fields?.role?.stringValue as UserRole) ?? "vendor";
+  } catch {
+    return "vendor";
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -36,31 +63,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        const role = await fetchRole(fbUser.uid);
-        setUser({ uid: fbUser.uid, email: fbUser.email!, role });
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setUser(JSON.parse(saved));
+    } catch {}
+    setLoading(false);
   }, []);
 
   const login = useCallback(
     async (email: string, password: string): Promise<AuthUser> => {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const role = await fetchRole(cred.user.uid);
-      const u: AuthUser = { uid: cred.user.uid, email: cred.user.email!, role };
+      const cred = await restSignIn(email, password);
+      const role = await fetchRole(cred.uid, cred.idToken);
+      const u: AuthUser = { ...cred, role };
       setUser(u);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(u)); } catch {}
       return u;
     },
     [],
   );
 
   const logout = useCallback(async () => {
-    await fbSignOut(auth);
     setUser(null);
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }, []);
 
   return (

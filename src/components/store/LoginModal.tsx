@@ -34,7 +34,7 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
     try {
       const u = await login(email, password);
       onClose();
-      navigate({ to: u.role === "admin" ? "/admin" : "/vendor" });
+      navigate({ to: u.role === "admin" ? "/admin" : "/" });
     } catch {
       setError("Email ou senha incorretos.");
     } finally {
