@@ -6,13 +6,22 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  signInWithEmailAndPassword,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
-import { firebaseConfig } from "@/lib/firebase";
-
-export type UserRole = "admin" | "vendor";
-export type AuthUser = { uid: string; email: string; role: UserRole; idToken: string };
-
-const PROJECT_ID = firebaseConfig.projectId;
+export type UserRole = "admin" | "client";
+export type AuthUser = {
+  uid: string;
+  email: string;
+  role: UserRole;
+  name?: string;
+  brandId?: string;
+};
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -23,41 +32,30 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const API_KEY = firebaseConfig.apiKey;
-const STORAGE_KEY = "auth:user";
+const SUPER_ADMIN_EMAIL = "augustocross87@gmail.com";
 
-// Login via REST API (contorna o SDK que falha com network-request-failed em alguns ambientes)
-async function restSignIn(email: string, password: string) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true }),
-    },
-  );
-  const data = await res.json();
-  if (!res.ok) {
-    const code = data?.error?.message ?? "UNKNOWN";
-    const err = new Error(code) as Error & { code: string };
-    err.code = code;
-    throw err;
-  }
-  return { uid: data.localId as string, email: data.email as string, idToken: data.idToken as string };
-}
-
-async function fetchRole(uid: string, idToken: string): Promise<UserRole> {
+async function fetchUserProfile(uid: string, email: string): Promise<AuthUser> {
   try {
-    const res = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`,
-      { headers: { Authorization: `Bearer ${idToken}` } },
-    );
-    if (!res.ok) return "vendor";
-    const data = await res.json();
-    return (data?.fields?.role?.stringValue as UserRole) ?? "vendor";
+    const snap = await getDoc(doc(db, "users", uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        uid,
+        email,
+        role: (data.role as UserRole) ?? "client",
+        name: data.name,
+        brandId: data.brandId,
+      };
+    }
   } catch {
-    return "vendor";
+    // Se não conseguir ler Firestore, usa defaults baseado no email
   }
+  // Super admin fallback por email
+  return {
+    uid,
+    email,
+    role: email === SUPER_ADMIN_EMAIL ? "admin" : "client",
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -65,28 +63,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setUser(JSON.parse(saved));
-    } catch {}
-    setLoading(false);
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const profile = await fetchUserProfile(fbUser.uid, fbUser.email!);
+        setUser(profile);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return unsub;
   }, []);
 
-  const login = useCallback(
-    async (email: string, password: string): Promise<AuthUser> => {
-      const cred = await restSignIn(email, password);
-      const role = await fetchRole(cred.uid, cred.idToken);
-      const u: AuthUser = { ...cred, role };
-      setUser(u);
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(u)); } catch {}
-      return u;
-    },
-    [],
-  );
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+    // Usa Firebase SDK — necessário para Firestore Rules funcionarem
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    const profile = await fetchUserProfile(cred.user.uid, cred.user.email!);
+    setUser(profile);
+    return profile;
+  }, []);
 
   const logout = useCallback(async () => {
+    await fbSignOut(auth);
     setUser(null);
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }, []);
 
   return (

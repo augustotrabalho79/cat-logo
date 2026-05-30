@@ -1,22 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, ExternalLink, Instagram } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight } from "lucide-react";
 import { getBrands, saveBrand, deleteBrand, getProducts, type Brand, type Product } from "@/lib/api";
 import { SlideOver } from "@/components/SlideOver";
 import { Btn, Field, TextInput, TextArea } from "@/components/ui-prim";
-import { ToggleSwitch } from "@/routes/admin.configuracoes";
 
 export const Route = createFileRoute("/admin/marcas")({
   component: AdminBrands,
 });
 
 const slugify = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 type BrandForm = {
   name: string; slug: string; tagline: string; description: string;
   primaryColor: string; secondaryColor: string;
-  website?: string; instagram?: string; active: boolean;
+  website: string; instagram: string; active: boolean;
 };
 
 const emptyForm: BrandForm = {
@@ -28,34 +27,120 @@ const emptyForm: BrandForm = {
 function AdminBrands() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Brand | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [form, setForm] = useState<BrandForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
 
   useEffect(() => {
-    getBrands().then(setBrands);
-    getProducts().then(setProducts);
+    Promise.all([getBrands(), getProducts()])
+      .then(([b, p]) => { setBrands(b); setProducts(p); })
+      .finally(() => setLoading(false));
   }, []);
 
-  function openNew() { setEditing(null); setForm(emptyForm); setOpen(true); }
+  function openNew() {
+    setEditing(null);
+    setForm(emptyForm);
+    setFormError("");
+    setFormSuccess("");
+    setOpen(true);
+  }
+
   function openEdit(b: Brand) {
     setEditing(b);
     setForm({
-      name: b.name, slug: b.slug, tagline: b.tagline, description: b.description ?? "",
-      primaryColor: b.primaryColor, secondaryColor: b.secondaryColor ?? "#e6e4dd",
-      website: "", instagram: "", active: true,
+      name: b.name ?? "",
+      slug: b.slug ?? "",
+      tagline: b.tagline ?? "",
+      description: (b as any).description ?? "",
+      primaryColor: b.primaryColor ?? "#0f0f0f",
+      secondaryColor: b.secondaryColor ?? "#e6e4dd",
+      website: (b as any).website ?? "",
+      instagram: (b as any).instagram ?? "",
+      active: (b as any).active !== false,
     });
+    setFormError("");
+    setFormSuccess("");
     setOpen(true);
   }
+
   async function onSave() {
-    await saveBrand({ ...form, id: editing?.id });
-    setOpen(false);
+    // Validação
+    if (!form.name.trim()) { setFormError("Nome da marca é obrigatório."); return; }
+    if (!form.slug.trim()) { setFormError("Slug é obrigatório."); return; }
+
+    setFormError("");
+    setFormSuccess("");
+    setSaving(true);
+
+    try {
+      const payload = {
+        ...form,
+        slug: form.slug || slugify(form.name),
+        id: editing?.id,
+      };
+      const savedId = await saveBrand(payload as any);
+
+      if (editing) {
+        // Atualiza na lista
+        setBrands((bs) =>
+          bs.map((b) => b.id === editing.id ? { ...b, ...payload, id: editing.id } : b),
+        );
+        setFormSuccess("Marca atualizada com sucesso!");
+      } else {
+        // Adiciona à lista
+        const newBrand: Brand = {
+          id: savedId,
+          name: form.name,
+          slug: form.slug || slugify(form.name),
+          tagline: form.tagline,
+          primaryColor: form.primaryColor,
+          secondaryColor: form.secondaryColor,
+          ...(form as any),
+        };
+        setBrands((bs) => [newBrand, ...bs]);
+        setFormSuccess("Marca criada com sucesso!");
+      }
+
+      setTimeout(() => {
+        setOpen(false);
+        setFormSuccess("");
+      }, 1200);
+    } catch (err: any) {
+      console.error("Erro ao salvar marca:", err);
+      if (err?.code === "permission-denied") {
+        setFormError("Sem permissão. Faça login novamente.");
+      } else {
+        setFormError(`Erro ao salvar: ${err?.message ?? "tente novamente"}`);
+      }
+    } finally {
+      setSaving(false);
+    }
   }
+
   async function onDelete(id: string) {
-    await deleteBrand(id);
-    setBrands((bs) => bs.filter((b) => b.id !== id));
+    try {
+      await deleteBrand(id);
+      setBrands((bs) => bs.filter((b) => b.id !== id));
+    } catch (err: any) {
+      console.error("Erro ao excluir:", err);
+      alert(`Erro ao excluir: ${err?.message}`);
+    }
     setConfirmId(null);
+  }
+
+  async function onToggleActive(b: Brand) {
+    const newActive = !(b as any).active;
+    try {
+      await saveBrand({ ...b, active: newActive } as any);
+      setBrands((bs) => bs.map((x) => x.id === b.id ? { ...x, active: newActive } as any : x));
+    } catch (err: any) {
+      alert(`Erro: ${err?.message}`);
+    }
   }
 
   function productCount(brandId: string) {
@@ -69,113 +154,237 @@ function AdminBrands() {
           <div className="label-eyebrow text-muted-foreground">Curadoria</div>
           <h1 className="mt-2 font-display text-4xl">Marcas</h1>
         </div>
-        <Btn onClick={openNew}><Plus className="h-4 w-4" strokeWidth={1.5} /> Nova marca</Btn>
+        <Btn onClick={openNew}>
+          <Plus className="h-4 w-4" strokeWidth={1.5} /> Nova marca
+        </Btn>
       </div>
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {brands.map((b) => {
-          const count = productCount(b.id);
-          return (
-            <div key={b.id} className="group relative border border-border bg-card transition hover:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.15)] hover:-translate-y-0.5">
-              <div className="h-[200px] w-full" style={{ background: `linear-gradient(135deg, ${b.secondaryColor ?? "#e6e4dd"}, ${b.primaryColor})` }} />
-              <div className="-mt-10 px-5">
-                <div className="inline-flex h-16 w-16 items-center justify-center border border-border bg-background font-display text-2xl">
-                  {b.name.charAt(0)}
+      {loading ? (
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-64 border border-border shimmer" />
+          ))}
+        </div>
+      ) : brands.length === 0 ? (
+        <div className="mt-16 border border-dashed border-border p-16 text-center">
+          <p className="font-display text-2xl text-muted-foreground">Nenhuma marca cadastrada</p>
+          <p className="mt-2 text-sm text-muted-foreground">Clique em "Nova marca" para começar.</p>
+          <div className="mt-6">
+            <Btn onClick={openNew}><Plus className="h-4 w-4" strokeWidth={1.5} /> Nova marca</Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {brands.map((b) => {
+            const count = productCount(b.id);
+            const isActive = (b as any).active !== false;
+            return (
+              <div key={b.id} className={`group relative border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-md ${!isActive ? "opacity-60" : ""}`}>
+                <div className="h-[160px] w-full" style={{ background: `linear-gradient(135deg, ${b.secondaryColor ?? "#e6e4dd"} 0%, ${b.primaryColor} 100%)` }} />
+                <div className="-mt-8 px-5">
+                  <div className="inline-flex h-14 w-14 items-center justify-center border border-border bg-background font-display text-xl shadow-sm">
+                    {b.name.charAt(0).toUpperCase()}
+                  </div>
                 </div>
-              </div>
-              <div className="px-5 pb-5 pt-3">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-xl">{b.name}</h3>
-                  <span className="label-eyebrow bg-[var(--success)] px-2 py-0.5 text-white">ativo</span>
+                <div className="px-5 pb-5 pt-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-display text-xl leading-tight">{b.name}</h3>
+                    <span className={`label-eyebrow shrink-0 px-2 py-0.5 ${isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                      {isActive ? "ativo" : "inativo"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{b.tagline || "Sem tagline"}</p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="label-eyebrow border border-border px-2 py-1 text-muted-foreground">
+                      {count} produto{count !== 1 ? "s" : ""}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-4 w-4 border border-border" style={{ background: b.primaryColor }} title={b.primaryColor} />
+                      <span className="h-4 w-4 border border-border" style={{ background: b.secondaryColor }} title={b.secondaryColor} />
+                    </div>
+                  </div>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{b.tagline}</p>
-                <div className="mt-4 flex items-center justify-between text-xs">
-                  <span className="label-eyebrow border border-border px-2 py-1">{count} produto{count === 1 ? "" : "s"}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-4 border border-border" style={{ background: b.primaryColor }} title={b.primaryColor} />
-                    <span className="h-4 w-4 border border-border" style={{ background: b.secondaryColor }} title={b.secondaryColor} />
+                <div className="absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-between gap-2 border-t border-border bg-background/95 p-3 opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
+                  <button
+                    onClick={() => onToggleActive(b)}
+                    title={isActive ? "Desativar" : "Ativar"}
+                    className="label-btn inline-flex items-center gap-1 border border-border px-2 py-1.5 hover:border-foreground"
+                  >
+                    {isActive
+                      ? <ToggleRight className="h-3.5 w-3.5 text-green-600" strokeWidth={1.5} />
+                      : <ToggleLeft className="h-3.5 w-3.5 text-gray-400" strokeWidth={1.5} />}
+                    <span>{isActive ? "Ativo" : "Inativo"}</span>
+                  </button>
+                  <div className="flex gap-2">
+                    <button onClick={() => openEdit(b)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 hover:border-foreground">
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar
+                    </button>
+                    <button onClick={() => setConfirmId(b.id)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 text-red-500 hover:border-red-400">
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-end gap-2 border-t border-border bg-background/95 p-3 opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
-                <button onClick={() => openEdit(b)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 hover:border-foreground">
-                  <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar
-                </button>
-                <button onClick={() => setConfirmId(b.id)} className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 text-[var(--sale)] hover:border-[var(--sale)]">
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Excluir
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
+      {/* SlideOver */}
       <SlideOver
         open={open}
-        onClose={() => setOpen(false)}
-        title={editing ? "Editar marca" : "Nova marca"}
+        onClose={() => !saving && setOpen(false)}
+        title={editing ? `Editar — ${editing.name}` : "Nova marca"}
         footer={
-          <div className="flex justify-end gap-3">
-            <Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn>
-            <Btn onClick={onSave}>Salvar</Btn>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1">
+              {formError && <p className="text-xs text-red-500">{formError}</p>}
+              {formSuccess && <p className="text-xs text-green-600">{formSuccess}</p>}
+            </div>
+            <div className="flex gap-3">
+              <Btn variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Btn>
+              <Btn onClick={onSave} disabled={saving}>
+                {saving ? "Salvando…" : "Salvar"}
+              </Btn>
+            </div>
           </div>
         }
       >
         <div className="space-y-5">
-          <Field label="Nome">
-            <TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: form.slug || slugify(e.target.value) })} />
+          <Field label="Nome *">
+            <TextInput
+              value={form.name}
+              placeholder="Ex: Atelier Branco"
+              onChange={(e) => {
+                const name = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  name,
+                  slug: f.slug && f.slug !== slugify(f.name) ? f.slug : slugify(name),
+                }));
+              }}
+            />
           </Field>
-          <Field label="Slug">
-            <TextInput value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
+
+          <Field label="Slug *">
+            <TextInput
+              value={form.slug}
+              placeholder="ex: atelier-branco"
+              onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              URL pública: /catalogo/<strong>{form.slug || "slug-da-marca"}</strong>
+            </p>
           </Field>
+
           <Field label="Tagline">
-            <TextInput value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
+            <TextInput
+              value={form.tagline}
+              placeholder="Frase curta da marca"
+              onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+            />
           </Field>
+
           <Field label="Descrição">
-            <TextArea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <TextArea
+              value={form.description}
+              placeholder="Sobre a marca..."
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
           </Field>
-          <Field label="Logo">
-            <div className="flex h-32 items-center justify-center border border-dashed border-border text-xs text-muted-foreground">
-              Arraste uma imagem ou clique para enviar
-            </div>
-          </Field>
-          <Field label="Banner">
-            <div className="flex h-32 items-center justify-center border border-dashed border-border text-xs text-muted-foreground">
-              Arraste uma imagem ou clique para enviar
-            </div>
-          </Field>
+
           <div className="grid grid-cols-2 gap-4">
             <Field label="Cor primária">
-              <input type="color" value={form.primaryColor} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} className="h-10 w-full border border-border bg-background" />
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.primaryColor}
+                  onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                  className="h-10 w-10 cursor-pointer border border-border bg-background"
+                />
+                <TextInput
+                  value={form.primaryColor}
+                  onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                  placeholder="#0f0f0f"
+                />
+              </div>
             </Field>
             <Field label="Cor secundária">
-              <input type="color" value={form.secondaryColor} onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })} className="h-10 w-full border border-border bg-background" />
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.secondaryColor}
+                  onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })}
+                  className="h-10 w-10 cursor-pointer border border-border bg-background"
+                />
+                <TextInput
+                  value={form.secondaryColor}
+                  onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })}
+                  placeholder="#e6e4dd"
+                />
+              </div>
             </Field>
           </div>
+
           <Field label="Website">
             <div className="flex items-center gap-2">
-              <ExternalLink className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-              <TextInput value={form.website ?? ""} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://exemplo.com" />
+              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+              <TextInput
+                value={form.website}
+                onChange={(e) => setForm({ ...form, website: e.target.value })}
+                placeholder="https://site.com"
+              />
             </div>
           </Field>
+
           <Field label="Instagram">
             <div className="flex items-center gap-2">
-              <Instagram className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-              <TextInput value={form.instagram ?? ""} onChange={(e) => setForm({ ...form, instagram: e.target.value })} placeholder="@marca" />
+              <Instagram className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+              <TextInput
+                value={form.instagram}
+                onChange={(e) => setForm({ ...form, instagram: e.target.value })}
+                placeholder="@marca"
+              />
             </div>
           </Field>
-          <label className="flex items-center justify-between border border-border px-4 py-3">
-            <span className="text-sm">Marca ativa</span>
-            <ToggleSwitch checked={form.active} onChange={(v) => setForm({ ...form, active: v })} />
+
+          <label className="flex items-center justify-between border border-border px-4 py-3 cursor-pointer">
+            <span className="text-sm">Marca ativa (visível no catálogo)</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.active}
+              onClick={() => setForm({ ...form, active: !form.active })}
+              className={`relative h-6 w-11 border transition ${form.active ? "border-foreground bg-foreground" : "border-border bg-background"}`}
+            >
+              <span className={`absolute top-0.5 h-4 w-4 transition ${form.active ? "left-6 bg-background" : "left-0.5 bg-foreground"}`} />
+            </button>
           </label>
+
+          {/* Preview */}
+          {form.name && (
+            <div className="border border-border p-4">
+              <p className="label-eyebrow mb-2 text-muted-foreground">Preview</p>
+              <div className="h-20 w-full" style={{ background: `linear-gradient(135deg, ${form.secondaryColor}, ${form.primaryColor})` }} />
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center border border-border bg-background font-display text-sm">
+                  {form.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="font-display text-lg">{form.name}</span>
+              </div>
+            </div>
+          )}
         </div>
       </SlideOver>
 
+      {/* Confirm delete */}
       {confirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
           <div className="w-full max-w-sm bg-background p-8 fade-in">
             <h3 className="font-display text-xl">Excluir marca?</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Esta ação não pode ser desfeita.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Esta ação não pode ser desfeita. Os produtos vinculados perderão a referência.
+            </p>
             <div className="mt-6 flex justify-end gap-3">
               <Btn variant="ghost" onClick={() => setConfirmId(null)}>Cancelar</Btn>
               <Btn variant="danger" onClick={() => onDelete(confirmId)}>Excluir</Btn>

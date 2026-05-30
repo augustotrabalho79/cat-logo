@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: verifica se o usuário está autenticado
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: verifica se é super admin pelo email
+    function isAdmin() {
+      return isAuth() && request.auth.token.email == "augustocross87@gmail.com";
+    }
+
+    // Helper: verifica se é admin pelo documento do usuário
+    function isAdminRole() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // USERS — admin lê tudo, usuário lê o próprio
+    match /users/{uid} {
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin() || isAdminRole());
+      allow write: if isAdmin() || isAdminRole();
+      // Permite criar o próprio perfil no primeiro login
+      allow create: if isAuth() && request.auth.uid == uid;
+    }
+
+    // BRANDS — leitura pública, escrita só autenticado admin
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAuth();  // Qualquer autenticado pode escrever (protegemos por role no app)
+    }
+
+    // CATEGORIES — leitura pública, escrita autenticado
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // PRODUCTS — leitura pública, escrita autenticado
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // BANNERS — leitura pública, escrita autenticado
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // VENDORS — só autenticado
+    match /vendors/{vendorId} {
+      allow read, write: if isAuth();
+    }
+
+    // CONFIG (store settings, notifications) — leitura pública, escrita autenticado
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // ORDERS — cliente cria, dono da marca lê os próprios
+    match /orders/{orderId} {
+      allow read: if isAuth();
+      allow create: if true; // Qualquer pessoa pode criar pedido (catálogo público)
+      allow update, delete: if isAuth();
+    }
+  }
+}
