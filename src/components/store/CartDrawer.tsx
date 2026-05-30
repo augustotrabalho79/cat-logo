@@ -24,12 +24,14 @@ export function CartDrawer({ cart, brand, catalogUrl }: CartDrawerProps) {
   const [observations, setObservations] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [waFallbackLink, setWaFallbackLink] = useState<string | null>(null);
 
   // Reseta o step sempre que o drawer fechar
   useEffect(() => {
     if (!cart.open) {
       setStep("cart");
       setError("");
+      setWaFallbackLink(null);
     }
   }, [cart.open]);
 
@@ -41,6 +43,7 @@ export function CartDrawer({ cart, brand, catalogUrl }: CartDrawerProps) {
 
   async function handleFinalize() {
     setError("");
+    setWaFallbackLink(null);
     if (!customerName.trim()) { setError("Informe seu nome completo."); return; }
     if (!customerPhone.trim()) { setError("Informe seu telefone ou WhatsApp."); return; }
     if (cart.items.length === 0) { setError("O carrinho está vazio."); return; }
@@ -49,32 +52,43 @@ export function CartDrawer({ cart, brand, catalogUrl }: CartDrawerProps) {
       return;
     }
 
+    // Calcula mensagem e link ANTES do await — ainda dentro do gesto do usuário
+    const orderItems: OrderItem[] = cart.items.map((item) => ({
+      ...item,
+      subtotal: item.unitPrice * item.quantity,
+    }));
+
+    const orderData = {
+      brandId: brand.id,
+      brandName: brand.name,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      observations: observations.trim() || undefined,
+      items: orderItems,
+      total: cart.total,
+      catalogUrl,
+      whatsappMessage: "",
+    };
+
+    const message = generateWhatsAppMessage(orderData);
+    orderData.whatsappMessage = message;
+    const waLink = buildWhatsAppLink(brand.whatsapp, message);
+
+    // Abre aba em branco DENTRO do gesto do usuário (antes de qualquer await).
+    // Mobile browsers só permitem window.open em resposta direta ao click.
+    const waWindow = window.open("", "_blank");
+
     setSaving(true);
     try {
-      const orderItems: OrderItem[] = cart.items.map((item) => ({
-        ...item,
-        subtotal: item.unitPrice * item.quantity,
-      }));
-
-      const orderData = {
-        brandId: brand.id,
-        brandName: brand.name,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        observations: observations.trim() || undefined,
-        items: orderItems,
-        total: cart.total,
-        catalogUrl,
-        whatsappMessage: "",
-      };
-
-      const message = generateWhatsAppMessage(orderData);
-      orderData.whatsappMessage = message;
-
       await createOrder({ ...orderData, status: "novo", source: "catalog", whatsappMessage: message });
 
-      const waLink = buildWhatsAppLink(brand.whatsapp, message);
-      window.open(waLink, "_blank");
+      // Pedido salvo — redireciona a aba já aberta para o WhatsApp
+      if (waWindow) {
+        waWindow.location.href = waLink;
+      } else {
+        // Aba foi bloqueada pelo browser — exibe link manual para o usuário clicar
+        setWaFallbackLink(waLink);
+      }
 
       cart.clearCart();
       handleClose();
@@ -82,6 +96,8 @@ export function CartDrawer({ cart, brand, catalogUrl }: CartDrawerProps) {
       setCustomerPhone("");
       setObservations("");
     } catch (e: any) {
+      // Pedido falhou — fecha aba em branco para não deixar tab pendurada
+      if (waWindow) waWindow.close();
       setError(`Erro ao enviar pedido: ${e?.message ?? "tente novamente"}`);
     } finally {
       setSaving(false);
@@ -293,6 +309,19 @@ export function CartDrawer({ cart, brand, catalogUrl }: CartDrawerProps) {
               </div>
 
               {error && <p className="text-xs text-red-500">{error}</p>}
+
+              {/* Fallback: exibido quando o browser bloqueou a aba do WhatsApp */}
+              {waFallbackLink && (
+                <a
+                  href={waFallbackLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full items-center justify-center gap-2 border border-green-600 px-4 py-3 text-xs font-medium uppercase tracking-widest text-green-600 transition hover:bg-green-50"
+                >
+                  <MessageCircle className="h-4 w-4" strokeWidth={1.5} />
+                  Toque aqui para abrir o WhatsApp
+                </a>
+              )}
             </div>
 
             {/* Footer */}
