@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, ExternalLink, Instagram, ToggleLeft, ToggleRight, Copy, Check, Phone } from "lucide-react";
 import { getBrands, saveBrand, deleteBrand, getProducts, uploadImage, type Brand, type Product } from "@/lib/api";
@@ -27,6 +27,7 @@ const emptyForm: BrandForm = {
 
 function AdminBrands() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,11 @@ function AdminBrands() {
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | undefined>();
   const [bannerPreview, setBannerPreview] = useState<string | undefined>();
+
+  // Apenas admin pode acessar
+  useEffect(() => {
+    if (user && user.role !== "admin") navigate({ to: "/admin" });
+  }, [user, navigate]);
 
   useEffect(() => {
     Promise.all([getBrands(), getProducts()])
