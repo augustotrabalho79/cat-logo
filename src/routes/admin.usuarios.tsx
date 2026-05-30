@@ -34,10 +34,37 @@ function UsuariosPage() {
   }, [user, navigate]);
 
   useEffect(() => {
-    Promise.all([getAllUsers(), getBrands()])
-      .then(([u, b]) => { setUsers(u); setBrands(b); })
-      .finally(() => setLoading(false));
-  }, []);
+    async function load() {
+      const [u, b] = await Promise.all([getAllUsers(), getBrands()]);
+
+      // Se o admin logado não tiver documento completo, completa automaticamente
+      if (user) {
+        const adminDoc = u.find((x) => x.uid === user.uid);
+        if (adminDoc && (!adminDoc.email || !adminDoc.name)) {
+          await updateClientUser(user.uid, {
+            email: user.email,
+            name: user.name || "Administrador",
+            role: "admin",
+            active: true,
+          });
+          // Atualiza localmente
+          const updated = u.map((x) =>
+            x.uid === user.uid
+              ? { ...x, email: user.email, name: user.name || "Administrador" }
+              : x,
+          );
+          setUsers(updated);
+        } else {
+          setUsers(u);
+        }
+      } else {
+        setUsers(u);
+      }
+      setBrands(b);
+      setLoading(false);
+    }
+    load().catch(() => setLoading(false));
+  }, [user]);
 
   function getBrandName(brandId?: string) {
     if (!brandId) return "—";
@@ -86,7 +113,7 @@ function UsuariosPage() {
         <section className="mb-8">
           <p className="label-eyebrow mb-3 text-muted-foreground">Minha conta</p>
           <div className="border border-border bg-card p-5 flex items-center gap-4">
-            <Avatar name={adminUser.name || adminUser.email} />
+            <Avatar name={adminUser.name || adminUser.email || "Admin"} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{adminUser.name || "—"}</span>
@@ -136,8 +163,8 @@ function UsuariosPage() {
                   <tr key={u.uid} className={`border-b border-border last:border-b-0 ${!u.active ? "opacity-50" : ""}`}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar name={u.name || u.email} />
-                        <span className="font-medium">{u.name || "—"}</span>
+                        <Avatar name={u.name || u.email || u.uid?.slice(0, 2)} />
+                        <span className="font-medium">{u.name || u.email || "—"}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{u.email}</td>
@@ -485,11 +512,14 @@ function PasswordModal({ user, onClose }: { user: ClientUser; onClose: () => voi
 
 // ─── Avatar ────────────────────────────────────────────────────────────────────
 
-function Avatar({ name }: { name: string }) {
-  const initials = name.split(" ").map((s) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+function Avatar({ name }: { name?: string }) {
+  const safe = name ?? "?";
+  const initials = safe === "?"
+    ? "?"
+    : safe.split(" ").map((s) => s?.[0] ?? "").filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
   return (
     <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-border bg-muted text-xs font-medium">
-      {initials || "?"}
+      {initials}
     </div>
   );
 }

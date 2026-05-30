@@ -23,7 +23,21 @@ export type ClientUser = {
 
 export async function getAllUsers(): Promise<ClientUser[]> {
   const snap = await getDocs(collection(db, "users"));
-  return snap.docs.map((d) => ({ uid: d.id, ...d.data() } as ClientUser));
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      uid: d.id,
+      email: data.email ?? "",
+      name: data.name ?? "",
+      role: data.role ?? "client",
+      active: data.active !== false,
+      brandId: data.brandId ?? undefined,
+      phone: data.phone ?? undefined,
+      notes: data.notes ?? undefined,
+      createdAt: data.createdAt,
+      createdBy: data.createdBy,
+    } as ClientUser;
+  });
 }
 
 // ─── Buscar um usuário específico ─────────────────────────────────────────────
