@@ -1,32 +1,35 @@
 import { createFileRoute, Outlet, Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Tag, Layers, Package, LogOut, Settings2, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Tag, Layers, Package, LogOut, Settings2, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { signOut, getLowStockCount, getProducts, type Product } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/admin")({
   component: AdminLayout,
 });
 
 type NavItem = {
-  to: "/admin" | "/admin/marcas" | "/admin/categorias" | "/admin/produtos" | "/admin/configuracoes";
+  to: "/admin" | "/admin/marcas" | "/admin/categorias" | "/admin/produtos" | "/admin/configuracoes" | "/admin/usuarios";
   label: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
   badge?: number;
+  adminOnly?: boolean;
 };
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@casabranca.com");
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const lowStock = getLowStockCount(products);
 
+  const isAdmin = user?.role === "admin";
+  const displayEmail = user?.email ?? localStorage.getItem("admin:email") ?? "";
+
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("admin:email");
-      if (saved) setEmail(saved);
       const col = localStorage.getItem("admin:sidebar-collapsed");
       if (col === "1") setCollapsed(true);
     } catch {}
@@ -56,10 +59,15 @@ function AdminLayout() {
     { to: "/admin/marcas", label: "Marcas", icon: Tag },
     { to: "/admin/categorias", label: "Categorias", icon: Layers },
     { to: "/admin/produtos", label: "Produtos", icon: Package, badge: lowStock > 0 ? lowStock : undefined },
+    { to: "/admin/usuarios", label: "Usuários", icon: Users, adminOnly: true },
   ];
+
   const bottomNav: NavItem[] = [
     { to: "/admin/configuracoes", label: "Configurações", icon: Settings2 },
   ];
+
+  // Filtra itens adminOnly para clientes
+  const visibleNav = nav.filter((n) => !n.adminOnly || isAdmin);
 
   const width = collapsed ? "w-16" : "w-60";
 
@@ -69,8 +77,10 @@ function AdminLayout() {
         <div className={`flex items-center border-b border-border ${collapsed ? "justify-center px-2 py-5" : "justify-between px-6 py-5"}`}>
           {!collapsed && (
             <div>
-              <div className="font-display text-xl">Casa Branca</div>
-              <div className="label-eyebrow mt-1 text-muted-foreground">Admin</div>
+              <div className="font-display text-xl">Catálogo</div>
+              <div className="label-eyebrow mt-1 text-muted-foreground">
+                {isAdmin ? "Super Admin" : "Admin"}
+              </div>
             </div>
           )}
           <button
@@ -82,7 +92,7 @@ function AdminLayout() {
           </button>
         </div>
         <nav className="flex-1 p-3">
-          {nav.map((n) => (
+          {visibleNav.map((n) => (
             <NavLink key={n.to} item={n} pathname={pathname} collapsed={collapsed} />
           ))}
         </nav>
@@ -92,7 +102,14 @@ function AdminLayout() {
           ))}
         </div>
         <div className="border-t border-border p-4">
-          {!collapsed && <div className="truncate text-xs text-muted-foreground">{email}</div>}
+          {!collapsed && (
+            <div>
+              <div className="truncate text-xs text-muted-foreground">{displayEmail}</div>
+              {isAdmin && (
+                <div className="mt-0.5 text-[10px] uppercase tracking-widest text-amber-600">Super Admin</div>
+              )}
+            </div>
+          )}
           <button
             onClick={handleSignOut}
             className={`label-btn mt-3 flex w-full items-center justify-center gap-2 border border-border py-2 hover:border-foreground ${collapsed ? "px-0" : ""}`}
@@ -103,9 +120,9 @@ function AdminLayout() {
         </div>
       </aside>
 
-      {/* mobile bottom nav */}
+      {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background md:hidden">
-        {[...nav, ...bottomNav].map((n) => {
+        {[...visibleNav, ...bottomNav].map((n) => {
           const active = n.exact ? pathname === n.to : pathname.startsWith(n.to);
           return (
             <Link key={n.to} to={n.to} className={`relative flex-1 flex flex-col items-center gap-1 py-3 text-[10px] uppercase tracking-widest ${active ? "text-foreground" : "text-muted-foreground"}`}>
