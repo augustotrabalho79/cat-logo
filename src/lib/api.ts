@@ -1,6 +1,6 @@
 // API real — Firebase Firestore + Cloudinary
 import {
-  collection, doc, getDocs, addDoc, updateDoc,
+  collection, doc, getDocs, addDoc, updateDoc, setDoc,
   deleteDoc, query, where, orderBy, serverTimestamp,
 } from "firebase/firestore";
 import {
@@ -233,4 +233,155 @@ export async function uploadImage(
 
   const data = await res.json();
   return data.secure_url as string;
+}
+
+// ─── TIPOS NOVOS ──────────────────────────────────────────────────────────────
+
+export type StoreSettings = {
+  name: string;
+  tagline: string;
+  description: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  primaryColor: string;
+  secondaryColor: string;
+};
+
+export type BannerPosition = "hero" | "novidades" | "entre-categorias" | "rodape" | "lateral";
+
+export type Banner = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  buttonText?: string;
+  buttonLink?: string;
+  position: BannerPosition;
+  order: number;
+  active: boolean;
+};
+
+export const bannerPositionLabel: Record<BannerPosition, string> = {
+  hero: "Hero principal",
+  novidades: "Seção novidades",
+  "entre-categorias": "Entre categorias",
+  rodape: "Rodapé da home",
+  lateral: "Lateral produtos",
+};
+
+export type VendorRole = "vendedor" | "gerente" | "admin";
+
+export type Vendor = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: VendorRole;
+  commission?: number;
+  active: boolean;
+  avatarUrl?: string;
+};
+
+export type NotificationSettings = {
+  onNewOrder: boolean;
+  onOutOfStock: boolean;
+  onLowStock: boolean;
+  lowStockThreshold: number;
+  email: string;
+};
+
+// ─── STORE SETTINGS ───────────────────────────────────────────────────────────
+
+const SETTINGS_DOC = "config/store";
+
+export async function getStoreSettings(): Promise<StoreSettings> {
+  try {
+    const snap = await getDocs(collection(db, "config"));
+    const d = snap.docs.find((x) => x.id === "store");
+    if (d) return d.data() as StoreSettings;
+  } catch {}
+  return {
+    name: "Casa Branca",
+    tagline: "Curadoria de moda atemporal",
+    description: "Casa Branca reúne marcas brasileiras autorais.",
+    primaryColor: "#0f0f0f",
+    secondaryColor: "#e6e4dd",
+  };
+}
+
+export async function saveStoreSettings(data: StoreSettings): Promise<void> {
+  await setDoc(doc(db, "config", "store"), { ...data, updatedAt: serverTimestamp() });
+}
+
+// ─── BANNERS ──────────────────────────────────────────────────────────────────
+
+export async function getBanners(): Promise<Banner[]> {
+  const snap = await getDocs(query(collection(db, "banners"), orderBy("order")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Banner));
+}
+
+export async function saveBanner(data: Partial<Banner> & { id?: string }): Promise<string> {
+  const { id, ...rest } = data;
+  if (id) {
+    await updateDoc(doc(db, "banners", id), { ...rest, updatedAt: serverTimestamp() });
+    return id;
+  }
+  const ref = await addDoc(collection(db, "banners"), { ...rest, createdAt: serverTimestamp() });
+  return ref.id;
+}
+
+export async function deleteBanner(id: string): Promise<void> {
+  await deleteDoc(doc(db, "banners", id));
+}
+
+// ─── VENDORS ──────────────────────────────────────────────────────────────────
+
+export async function getVendors(): Promise<Vendor[]> {
+  const snap = await getDocs(collection(db, "vendors"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Vendor));
+}
+
+export async function saveVendor(data: Partial<Vendor> & { id?: string }): Promise<string> {
+  const { id, ...rest } = data;
+  if (id) {
+    await updateDoc(doc(db, "vendors", id), { ...rest, updatedAt: serverTimestamp() });
+    return id;
+  }
+  const ref = await addDoc(collection(db, "vendors"), { ...rest, createdAt: serverTimestamp() });
+  return ref.id;
+}
+
+export async function deleteVendor(id: string): Promise<void> {
+  await deleteDoc(doc(db, "vendors", id));
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  try {
+    const snap = await getDocs(collection(db, "config"));
+    const d = snap.docs.find((x) => x.id === "notifications");
+    if (d) return d.data() as NotificationSettings;
+  } catch {}
+  return {
+    onNewOrder: true,
+    onOutOfStock: true,
+    onLowStock: false,
+    lowStockThreshold: 5,
+    email: "",
+  };
+}
+
+export async function saveNotificationSettings(data: NotificationSettings): Promise<void> {
+  await setDoc(doc(db, "config", "notifications"), { ...data, updatedAt: serverTimestamp() });
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+export function getProductStock(p: Product): number {
+  return (p.variants ?? []).reduce((sum, v) => sum + (v.stock || 0), 0);
+}
+
+export function getLowStockCount(threshold = 5): number {
+  return 0; // calculado dinamicamente via Firestore em produção
 }

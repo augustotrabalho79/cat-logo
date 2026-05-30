@@ -15,6 +15,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as StoreIndexRouteImport } from './routes/_store.index'
 import { Route as AdminMarcasRouteImport } from './routes/admin.marcas'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminConfiguracoesRouteImport } from './routes/admin.configuracoes'
 import { Route as AdminCategoriasRouteImport } from './routes/admin.categorias'
 import { Route as StoreLookbookRouteImport } from './routes/_store.lookbook'
 import { Route as AdminProdutosIndexRouteImport } from './routes/admin.produtos.index'
@@ -52,6 +53,11 @@ const AdminMarcasRoute = AdminMarcasRouteImport.update({
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminConfiguracoesRoute = AdminConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCategoriasRoute = AdminCategoriasRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/lookbook': typeof StoreLookbookRoute
   '/admin/categorias': typeof AdminCategoriasRoute
+  '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
   '/admin/': typeof AdminIndexRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/lookbook': typeof StoreLookbookRoute
   '/admin/categorias': typeof AdminCategoriasRoute
+  '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
   '/': typeof StoreIndexRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/_store/lookbook': typeof StoreLookbookRoute
   '/admin/categorias': typeof AdminCategoriasRoute
+  '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/marcas': typeof AdminMarcasRoute
   '/_store/': typeof StoreIndexRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/lookbook'
     | '/admin/categorias'
+    | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
     | '/admin/'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
   to:
     | '/lookbook'
     | '/admin/categorias'
+    | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
     | '/'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/_store/lookbook'
     | '/admin/categorias'
+    | '/admin/configuracoes'
     | '/admin/login'
     | '/admin/marcas'
     | '/_store/'
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/admin/login'
       preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/configuracoes': {
+      id: '/admin/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/admin/configuracoes'
+      preLoaderRoute: typeof AdminConfiguracoesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/categorias': {
@@ -337,6 +356,7 @@ const StoreRouteWithChildren = StoreRoute._addFileChildren(StoreRouteChildren)
 
 interface AdminRouteChildren {
   AdminCategoriasRoute: typeof AdminCategoriasRoute
+  AdminConfiguracoesRoute: typeof AdminConfiguracoesRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminMarcasRoute: typeof AdminMarcasRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -347,6 +367,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminCategoriasRoute: AdminCategoriasRoute,
+  AdminConfiguracoesRoute: AdminConfiguracoesRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminMarcasRoute: AdminMarcasRoute,
   AdminIndexRoute: AdminIndexRoute,
