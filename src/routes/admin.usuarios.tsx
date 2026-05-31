@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  Plus, Pencil, UserX, UserCheck, KeyRound, X, Eye, EyeOff,
+  Plus, Pencil, UserX, UserCheck, KeyRound, Eye, EyeOff,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAllUsers, createClientUser, updateClientUser,
-  deactivateUser, activateUser, setUserPassword,
+  deactivateUser, activateUser, sendPasswordReset,
   type ClientUser,
 } from "@/lib/users";
 import { getBrands, type Brand } from "@/lib/api";
@@ -25,7 +25,7 @@ function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [slideOpen, setSlideOpen] = useState(false);
   const [editing, setEditing] = useState<ClientUser | null>(null);
-  const [pwdModal, setPwdModal] = useState<ClientUser | null>(null);
+  const [resetSent, setResetSent] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<{ user: ClientUser; action: "activate" | "deactivate" } | null>(null);
 
   // Apenas admin pode acessar
@@ -79,6 +79,12 @@ function UsuariosPage() {
     }
     setUsers((prev) => prev.map((x) => x.uid === u.uid ? { ...x, active: !u.active } : x));
     setConfirmUser(null);
+  }
+
+  async function handleSendPasswordReset(u: ClientUser) {
+    await sendPasswordReset(u.email);
+    setResetSent(u.email);
+    setTimeout(() => setResetSent(null), 4000);
   }
 
   function openNew() { setEditing(null); setSlideOpen(true); }
@@ -184,8 +190,8 @@ function UsuariosPage() {
                           <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
                         </button>
                         <button
-                          onClick={() => setPwdModal(u)}
-                          title="Alterar senha"
+                          onClick={() => handleSendPasswordReset(u)}
+                          title="Enviar e-mail de redefinição de senha"
                           className="label-btn inline-flex items-center gap-1 border border-border px-3 py-1.5 hover:border-foreground"
                         >
                           <KeyRound className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -209,6 +215,13 @@ function UsuariosPage() {
         )}
       </section>
 
+      {/* Feedback redefinição de senha */}
+      {resetSent && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 bg-foreground px-5 py-3 text-sm text-background shadow-lg">
+          E-mail de redefinição enviado para {resetSent}
+        </div>
+      )}
+
       {/* SlideOver criar/editar */}
       <UserSlideOver
         open={slideOpen}
@@ -218,14 +231,6 @@ function UsuariosPage() {
         adminUid={user?.uid ?? ""}
         onSaved={onSaved}
       />
-
-      {/* Modal alterar senha */}
-      {pwdModal && (
-        <PasswordModal
-          user={pwdModal}
-          onClose={() => setPwdModal(null)}
-        />
-      )}
 
       {/* Confirm ativar/desativar */}
       {confirmUser && (
@@ -436,76 +441,6 @@ function UserSlideOver({
         )}
       </div>
     </SlideOver>
-  );
-}
-
-// ─── Modal alterar senha ───────────────────────────────────────────────────────
-
-function PasswordModal({ user, onClose }: { user: ClientUser; onClose: () => void }) {
-  const [pwd, setPwd] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  async function onSave() {
-    if (pwd.length < 6) { setError("Mínimo 6 caracteres."); return; }
-    setSaving(true);
-    try {
-      await setUserPassword(user.uid, pwd);
-      setSuccess(true);
-      setTimeout(onClose, 1500);
-    } catch (e: any) {
-      setError(e?.message ?? "Erro ao alterar senha");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
-      <div className="w-full max-w-sm bg-background p-8 fade-in">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-display text-xl">Alterar senha</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
-          </div>
-          <button onClick={onClose}><X className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} /></button>
-        </div>
-
-        {success ? (
-          <p className="mt-6 text-sm text-green-600">✅ Senha alterada com sucesso!</p>
-        ) : (
-          <>
-            <div className="mt-6">
-              <Field label="Nova senha">
-                <div className="relative">
-                  <TextInput
-                    type={showPwd ? "text" : "password"}
-                    value={pwd}
-                    onChange={(e) => { setPwd(e.target.value); setError(""); }}
-                    placeholder="Mínimo 6 caracteres"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPwd((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </Field>
-              {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-              <Btn onClick={onSave} disabled={saving}>{saving ? "Salvando…" : "Salvar"}</Btn>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
   );
 }
 
