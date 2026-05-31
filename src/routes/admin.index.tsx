@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Package, Tag, ImageOff, AlertTriangle, Users,
-  ArrowRight, Settings2, Layers,
+  ArrowRight, Settings2, Layers, ShoppingBag,
 } from "lucide-react";
 import { getProducts, getBrands, type Product, type Brand } from "@/lib/api";
 import { getAllUsers } from "@/lib/users";
@@ -61,7 +61,7 @@ function Dashboard() {
     : [
         { to: "/admin/produtos", icon: Package, label: "Produtos", desc: "Adicione e edite produtos do seu catálogo" },
         { to: "/admin/categorias", icon: Layers, label: "Categorias", desc: "Organize as categorias do catálogo" },
-        { to: "/admin/configuracoes", icon: Settings2, label: "Configurações", desc: "Identidade visual e preferências" },
+        { to: "/admin/pedidos", icon: ShoppingBag, label: "Pedidos", desc: "Acompanhe os pedidos recebidos no catálogo" },
       ];
 
   return (

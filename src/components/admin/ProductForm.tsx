@@ -13,6 +13,7 @@ import {
   type Product,
   type Variant,
 } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { Field, TextInput, TextArea, Select, Btn } from "@/components/ui-prim";
 
 const slugify = (s: string) =>
@@ -23,6 +24,7 @@ const MAX_PHOTOS = 8;
 
 export function ProductForm({ productId }: { productId?: string }) {
   const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
 
@@ -37,16 +39,21 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [basePrice, setBasePrice] = useState<number | "">("");
   const [salePrice, setSalePrice] = useState<number | "">("");
   const [images, setImages] = useState<string[]>([]);
+  const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [status, setStatus] = useState<Status>("rascunho");
   const [isNew, setIsNew] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     getBrands().then(setBrands);
-    getCategories().then(setCats);
+    // categorias filtradas pela marca do usuário
+    getCategories(isAdmin ? undefined : user?.brandId || undefined).then(setCats);
     if (productId) {
-      getProducts().then((all) => {
+      getProducts(isAdmin ? undefined : { brandId: user?.brandId || undefined }).then((all) => {
         const p = all.find((x) => x.id === productId);
         if (!p) return;
         setName(p.name); setSlug(p.slug); setDescription(p.description ?? ""); setBrandId(p.brandId);
@@ -55,8 +62,11 @@ export function ProductForm({ productId }: { productId?: string }) {
         setImages(p.images ?? []);
         setVariants(p.variants ?? []); setStatus(p.status); setIsNew(p.isNew); setIsFeatured(!!p.isFeatured);
       });
+    } else if (!isAdmin && user?.brandId) {
+      // brand_admin: pré-seleciona a própria marca ao criar novo produto
+      setBrandId(user.brandId);
     }
-  }, [productId]);
+  }, [productId, isAdmin, user?.brandId]);
 
   function addTag() {
     const parts = tagInput.split(",").map((t) => t.trim()).filter(Boolean);
@@ -79,13 +89,21 @@ export function ProductForm({ productId }: { productId?: string }) {
   }
 
   async function onUpload(files: FileList | null) {
-    if (!files) return;
+    if (!files || images.length >= MAX_PHOTOS) return;
     const available = MAX_PHOTOS - images.length;
-    const slice = Array.from(files).slice(0, Math.max(0, available));
+    const slice = Array.from(files).slice(0, available);
+    setUploadError("");
+    setUploading(true);
     for (const f of slice) {
-      const url = await uploadImage(f, "product-images");
-      setImages((imgs) => [...imgs, url || URL.createObjectURL(f)]);
+      try {
+        const url = await uploadImage(f, "product-images");
+        setImages((imgs) => [...imgs, url]);
+      } catch (err: any) {
+        setUploadError(err?.message ?? "Erro ao enviar imagem. Verifique o arquivo e tente novamente.");
+        break;
+      }
     }
+    setUploading(false);
   }
 
   function setAsCover(i: number) {
@@ -94,13 +112,21 @@ export function ProductForm({ productId }: { productId?: string }) {
   }
 
   async function save(nextStatus?: Status) {
-    const finalStatus = nextStatus ?? status;
-    await saveProduct({
-      id: productId, name, slug, description, brandId, categoryId, gender, tags,
-      basePrice: Number(basePrice) || 0, salePrice: salePrice === "" ? null : Number(salePrice),
-      images, variants, status: finalStatus, isNew, isFeatured,
-    });
-    navigate({ to: "/admin/produtos" });
+    setSaveError("");
+    setSaving(true);
+    try {
+      const finalStatus = nextStatus ?? status;
+      await saveProduct({
+        id: productId, name, slug, description, brandId, categoryId, gender, tags,
+        basePrice: Number(basePrice) || 0, salePrice: salePrice === "" ? null : Number(salePrice),
+        images, variants, status: finalStatus, isNew, isFeatured,
+      });
+      navigate({ to: "/admin/produtos" });
+    } catch (err: any) {
+      setSaveError(err?.message ?? "Erro ao salvar produto. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const totalStock = variants.reduce((s, v) => s + (Number(v.stock) || 0), 0);
@@ -125,13 +151,15 @@ export function ProductForm({ productId }: { productId?: string }) {
             <Field label="Descrição">
               <TextArea value={description} onChange={(e) => setDescription(e.target.value)} />
             </Field>
-            <div className="grid gap-5 md:grid-cols-3">
-              <Field label="Marca">
-                <Select value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-                  <option value="">— Selecionar —</option>
-                  {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </Select>
-              </Field>
+            <div className={`grid gap-5 ${isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+              {isAdmin && (
+                <Field label="Marca">
+                  <Select value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                    <option value="">— Selecionar —</option>
+                    {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </Select>
+                </Field>
+              )}
               <Field label="Categoria">
                 <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                   <option value="">— Selecionar —</option>
@@ -184,14 +212,24 @@ export function ProductForm({ productId }: { productId?: string }) {
           <Section title="Fotos" right={<span className="text-xs text-muted-foreground">{images.length}/{MAX_PHOTOS} fotos</span>}>
             <label
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); onUpload(e.dataTransfer.files); }}
-              className="flex h-44 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border text-sm text-muted-foreground hover:border-foreground"
+              onDrop={(e) => { e.preventDefault(); if (!uploading) onUpload(e.dataTransfer.files); }}
+              className={`flex h-44 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed border-border text-sm text-muted-foreground hover:border-foreground ${uploading ? "pointer-events-none opacity-60" : ""}`}
             >
-              <Upload className="h-6 w-6" strokeWidth={1.5} />
-              <span>Arraste fotos aqui ou clique para selecionar</span>
-              <span className="text-[10px]">PNG, JPG até 5MB cada</span>
-              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => onUpload(e.target.files)} disabled={images.length >= MAX_PHOTOS} />
+              {uploading ? (
+                <>
+                  <div className="h-6 w-6 animate-spin border-2 border-border border-t-foreground" />
+                  <span>Enviando…</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-6 w-6" strokeWidth={1.5} />
+                  <span>Arraste fotos aqui ou clique para selecionar</span>
+                  <span className="text-[10px]">PNG, JPG até 5MB cada</span>
+                </>
+              )}
+              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => onUpload(e.target.files)} disabled={images.length >= MAX_PHOTOS || uploading} />
             </label>
+            {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
             {images.length > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {images.map((src, i) => (
@@ -357,11 +395,18 @@ export function ProductForm({ productId }: { productId?: string }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background">
+        {saveError && (
+          <div className="border-b border-red-200 bg-red-50 px-6 py-2 text-xs text-red-600">{saveError}</div>
+        )}
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-4">
           <Link to="/admin/produtos" className="label-btn text-muted-foreground hover:text-foreground">Cancelar</Link>
           <div className="flex gap-3">
-            <Btn variant="outline" type="button" onClick={() => save("rascunho")}>Salvar rascunho</Btn>
-            <Btn type="button" onClick={() => save("publicado")}>Publicar</Btn>
+            <Btn variant="outline" type="button" onClick={() => save("rascunho")} disabled={saving || uploading}>
+              {saving ? "Salvando…" : "Salvar rascunho"}
+            </Btn>
+            <Btn type="button" onClick={() => save("publicado")} disabled={saving || uploading}>
+              {saving ? "Salvando…" : "Publicar"}
+            </Btn>
           </div>
         </div>
       </div>

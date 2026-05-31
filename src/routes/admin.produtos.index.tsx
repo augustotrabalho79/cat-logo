@@ -33,11 +33,15 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
 function AdminProdutos() {
   const { user, isAdmin } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getProducts(isAdmin ? undefined : { brandId: user?.brandId }).then(setProducts);
+    setLoading(true);
+    getProducts(isAdmin ? undefined : { brandId: user?.brandId })
+      .then(setProducts)
+      .finally(() => setLoading(false));
   }, [isAdmin, user?.brandId]);
 
   const filtered = useMemo(
@@ -145,7 +149,13 @@ function AdminProdutos() {
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto border border-border bg-card">
+      {loading ? (
+        <div className="mt-6 space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-16 border border-border shimmer" />)}
+        </div>
+      ) : null}
+
+      <div className={`mt-6 overflow-x-auto border border-border bg-card ${loading ? "hidden" : ""}`}>
         <table className="w-full text-sm">
           <thead className="border-b border-border">
             <tr className="label-eyebrow text-left text-muted-foreground">
