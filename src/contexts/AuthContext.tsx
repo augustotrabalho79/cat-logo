@@ -2,11 +2,7 @@ import {
   createContext, useCallback, useContext,
   useEffect, useState, type ReactNode,
 } from "react";
-import {
-  signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged,
-} from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -35,21 +31,29 @@ const SUPER_ADMIN_EMAIL = "augustocross87@gmail.com";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
+/** Mapeia role do Supabase (super_admin|brand_admin) para o tipo legado (admin|client) */
+function mapRole(dbRole: string | undefined): UserRole {
+  return dbRole === "super_admin" ? "admin" : "client";
+}
+
 async function fetchUserProfile(uid: string, email: string): Promise<AuthUser> {
   try {
-    const snap = await getDoc(doc(db, "users", uid));
-    if (snap.exists()) {
-      const data = snap.data();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("email, name, role, brand_id, active")
+      .eq("id", uid)
+      .maybeSingle();
+    if (!error && data) {
       return {
         uid,
         email: data.email ?? email,
-        role: (data.role as UserRole) ?? "client",
+        role: mapRole(data.role),
         name: data.name ?? undefined,
-        brandId: data.brandId ?? undefined,
+        brandId: data.brand_id ?? undefined,
       };
     }
   } catch {
-    // Firestore inacessível — fallback por email
+    // ignore — fallback abaixo
   }
 
   // Fallback: super admin identificado pelo email
@@ -67,31 +71,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        try {
-          const profile = await fetchUserProfile(fbUser.uid, fbUser.email!);
-          setUser(profile);
-        } catch {
-          setUser({ uid: fbUser.uid, email: fbUser.email!, role: "client" });
-        }
+    // Sessão atual ao montar
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id, session.user.email ?? "");
+        setUser(profile);
       } else {
         setUser(null);
       }
       setLoading(false);
     });
-    return unsub;
+
+    // Listener de mudanças (login, logout, refresh)
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id, session.user.email ?? "");
+        setUser(profile);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    const profile = await fetchUserProfile(cred.user.uid, cred.user.email!);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.user) throw new Error("Login falhou.");
+    const profile = await fetchUserProfile(data.user.id, data.user.email ?? email);
     setUser(profile);
     return profile;
   }, []);
 
   const logout = useCallback(async () => {
-    await fbSignOut(auth);
+    await supabase.auth.signOut();
     setUser(null);
   }, []);
 

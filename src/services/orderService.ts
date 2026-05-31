@@ -1,13 +1,10 @@
 /**
  * orderService.ts
- * Serviço de pedidos — criação pública + leitura admin.
+ * Pedidos — criação pública (anon) + leitura/atualização admin.
+ * Backend: Supabase Postgres com RLS.
  */
 
-import {
-  collection, addDoc, getDocs, doc, updateDoc,
-  query, where, orderBy, serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import type { CartItem } from "@/hooks/use-cart";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -60,14 +57,47 @@ export type Order = {
   updatedAt?: unknown;
 };
 
+type OrderRow = {
+  id: string;
+  brand_id: string;
+  brand_name: string | null;
+  customer_name: string;
+  customer_phone: string;
+  observations: string | null;
+  items: unknown;
+  total: number | string;
+  status: OrderStatus;
+  source: string;
+  catalog_url: string | null;
+  whatsapp_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToOrder(r: OrderRow): Order {
+  return {
+    id: r.id,
+    brandId: r.brand_id,
+    brandName: r.brand_name ?? "",
+    customerName: r.customer_name,
+    customerPhone: r.customer_phone,
+    observations: r.observations ?? undefined,
+    items: Array.isArray(r.items) ? (r.items as OrderItem[]) : [],
+    total: Number(r.total ?? 0),
+    status: r.status,
+    source: "catalog",
+    catalogUrl: r.catalog_url ?? "",
+    whatsappMessage: r.whatsapp_message ?? "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 // ─── WHATSAPP ─────────────────────────────────────────────────────────────────
 
 export function formatWhatsAppPhone(phone: string): string {
-  // Remove tudo exceto dígitos
   const digits = phone.replace(/\D/g, "");
-  // Se já tem código do país (55), retorna como está
   if (digits.startsWith("55") && digits.length >= 12) return digits;
-  // Se tem 10-11 dígitos (DDD + número), adiciona 55
   if (digits.length >= 10) return `55${digits}`;
   return digits;
 }
@@ -115,33 +145,41 @@ export function buildWhatsAppLink(phone: string, message: string): string {
   return `https://wa.me/${formatted}?text=${encodeURIComponent(message)}`;
 }
 
-// ─── FIRESTORE ────────────────────────────────────────────────────────────────
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
 
 export async function createOrder(
   data: Omit<Order, "id" | "createdAt" | "updatedAt">,
 ): Promise<string> {
-  const payload = {
-    ...data,
+  const row = {
+    brand_id: data.brandId,
+    brand_name: data.brandName,
+    customer_name: data.customerName,
+    customer_phone: data.customerPhone,
+    observations: data.observations ?? null,
+    items: data.items,
+    total: data.total,
     status: "novo" as OrderStatus,
-    source: "catalog" as const,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    source: "catalog",
+    catalog_url: data.catalogUrl,
+    whatsapp_message: data.whatsappMessage,
   };
-  const ref = await addDoc(collection(db, "orders"), payload);
-  return ref.id;
+
+  const { data: inserted, error } = await supabase
+    .from("orders").insert(row).select().single();
+  if (error) throw error;
+  return inserted.id;
 }
 
 export async function getOrders(brandId?: string): Promise<Order[]> {
-  const constraints: any[] = [orderBy("createdAt", "desc")];
-  if (brandId) constraints.push(where("brandId", "==", brandId));
-
-  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Order);
+  let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
+  if (brandId) q = q.eq("brand_id", brandId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(rowToOrder);
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  await updateDoc(doc(db, "orders", orderId), {
-    status,
-    updatedAt: serverTimestamp(),
-  });
+  const { error } = await supabase
+    .from("orders").update({ status }).eq("id", orderId);
+  if (error) throw error;
 }

@@ -5,7 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Remove campos undefined antes de salvar no Firestore */
+/**
+ * Remove campos undefined antes de salvar.
+ * @deprecated mantido para compatibilidade; Supabase aceita null mas não undefined.
+ */
 export function cleanForFirestore<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined),

@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { firebaseConfig } from "@/lib/firebase";
 import { Field, TextInput, Btn } from "@/components/ui-prim";
 
 export const Route = createFileRoute("/admin/login")({
@@ -22,58 +21,25 @@ function AdminLogin() {
     setLoading(true);
 
     try {
-      // Tenta Firebase SDK primeiro (necessário para Firestore Rules)
-      const user = await login(email, password);
+      await login(email, password);
       localStorage.setItem("admin:email", email);
-      navigate({ to: user.role === "admin" ? "/admin" : "/admin" });
-    } catch (sdkErr: any) {
-      const sdkCode = sdkErr?.code ?? "";
+      navigate({ to: "/admin" });
+    } catch (err: any) {
+      const msg = (err?.message ?? "").toLowerCase();
 
       if (
-        sdkCode === "auth/invalid-credential" ||
-        sdkCode === "auth/wrong-password" ||
-        sdkCode === "auth/user-not-found"
+        msg.includes("invalid login") ||
+        msg.includes("invalid credentials") ||
+        msg.includes("wrong password") ||
+        msg.includes("user not found")
       ) {
         setError("E-mail ou senha inválidos.");
-        setLoading(false);
-        return;
-      }
-
-      if (sdkCode === "auth/too-many-requests") {
+      } else if (msg.includes("rate limit") || msg.includes("too many")) {
         setError("Muitas tentativas. Aguarde alguns minutos.");
-        setLoading(false);
-        return;
-      }
-
-      // SDK falhou por network — tenta REST como fallback
-      try {
-        const res = await fetch(
-          `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password, returnSecureToken: true }),
-          },
-        );
-        const data = await res.json();
-        if (!res.ok) {
-          const code = data?.error?.message ?? "";
-          if (code.includes("INVALID") || code.includes("NOT_FOUND")) {
-            setError("E-mail ou senha inválidos.");
-          } else {
-            setError(`Erro: ${code || "desconhecido"}`);
-          }
-          setLoading(false);
-          return;
-        }
-
-        // REST funcionou — salva sessão e redireciona
-        localStorage.setItem("admin:email", email);
-        localStorage.setItem("admin:uid", data.localId);
-        localStorage.setItem("admin:token", data.idToken);
-        navigate({ to: "/admin" });
-      } catch (restErr: any) {
+      } else if (msg.includes("network") || msg.includes("fetch")) {
         setError("Sem conexão com o servidor. Verifique sua internet.");
+      } else {
+        setError(`Erro: ${err?.message ?? "desconhecido"}`);
       }
     } finally {
       setLoading(false);

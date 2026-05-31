@@ -1,19 +1,13 @@
 /**
- * api.ts — Camada de dados principal (Firebase Firestore + Cloudinary)
- * Regras:
- *  - nunca salvar undefined no Firestore (usar cleanForFirestore)
- *  - nunca salvar blob: URLs (apenas secure_url do Cloudinary)
- *  - sempre adicionar createdAt/updatedAt nos documentos
- *  - filtrar por brandId quando o usuário for brand_admin
+ * api.ts — Camada de dados (Supabase Postgres + Cloudinary)
+ * Mantém a mesma API pública da versão Firestore para minimizar mudanças no frontend.
+ *
+ * Mapeamentos:
+ *   DB snake_case (logo_url, brand_id...) ↔ TS camelCase (logoUrl, brandId...)
+ *   profiles.role: super_admin → "admin" | brand_admin → "client"
  */
 
-import {
-  collection, doc, getDocs, getDoc, addDoc, setDoc,
-  deleteDoc, query, orderBy, where, serverTimestamp, Timestamp,
-} from "firebase/firestore";
-import { signInWithEmailAndPassword, signOut as fbSignOut } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { cleanForFirestore } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -173,11 +167,131 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Garante que a URL seja do Cloudinary (ou string vazia) — nunca blob: */
-function sanitizeImageUrl(url: string | undefined): string | undefined {
+function sanitizeImageUrl(url: string | undefined | null): string | undefined {
   if (!url) return undefined;
-  if (url.startsWith("blob:")) return undefined; // rejeita blob URLs
+  if (url.startsWith("blob:")) return undefined;
   return url;
+}
+
+// ─── MAPEADORES ROW <→ TS ──────────────────────────────────────────────────────
+
+type BrandRow = {
+  id: string; name: string; slug: string; tagline: string | null;
+  description: string | null; logo_url: string | null; banner_url: string | null;
+  primary_color: string | null; secondary_color: string | null;
+  website: string | null; instagram: string | null; whatsapp: string | null;
+  active: boolean; created_at: string; updated_at: string;
+};
+
+function rowToBrand(r: BrandRow): Brand {
+  return {
+    id: r.id, name: r.name, slug: r.slug, tagline: r.tagline ?? "",
+    description: r.description ?? undefined,
+    logoUrl: r.logo_url ?? undefined,
+    bannerUrl: r.banner_url ?? undefined,
+    primaryColor: r.primary_color ?? "#0f0f0f",
+    secondaryColor: r.secondary_color ?? undefined,
+    website: r.website ?? undefined,
+    instagram: r.instagram ?? undefined,
+    whatsapp: r.whatsapp ?? undefined,
+    active: r.active,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+function brandToRow(b: Partial<Brand>): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  if (b.name !== undefined) row.name = b.name;
+  if (b.slug !== undefined) row.slug = b.slug;
+  if (b.tagline !== undefined) row.tagline = b.tagline;
+  if (b.description !== undefined) row.description = b.description;
+  if (b.logoUrl !== undefined) row.logo_url = sanitizeImageUrl(b.logoUrl);
+  if (b.bannerUrl !== undefined) row.banner_url = sanitizeImageUrl(b.bannerUrl);
+  if (b.primaryColor !== undefined) row.primary_color = b.primaryColor;
+  if (b.secondaryColor !== undefined) row.secondary_color = b.secondaryColor;
+  if (b.website !== undefined) row.website = b.website;
+  if (b.instagram !== undefined) row.instagram = b.instagram;
+  if (b.whatsapp !== undefined) row.whatsapp = b.whatsapp;
+  if (b.active !== undefined) row.active = b.active;
+  return row;
+}
+
+type ProductRow = {
+  id: string; brand_id: string; category_id: string | null;
+  name: string; slug: string; description: string | null;
+  base_price: number | string; sale_price: number | string | null;
+  status: ProductStatus;
+  gender: "masculino" | "feminino" | "unissex" | "infantil";
+  is_new: boolean; is_featured: boolean;
+  tags: string[]; images: unknown; variants: unknown;
+  created_at: string; updated_at: string;
+};
+
+function rowToProduct(r: ProductRow): Product {
+  return {
+    id: r.id, brandId: r.brand_id,
+    categoryId: r.category_id ?? undefined,
+    name: r.name, slug: r.slug,
+    description: r.description ?? undefined,
+    basePrice: Number(r.base_price ?? 0),
+    salePrice: r.sale_price == null ? null : Number(r.sale_price),
+    status: r.status, gender: r.gender,
+    isNew: r.is_new, isFeatured: r.is_featured,
+    tags: r.tags ?? [],
+    images: Array.isArray(r.images) ? (r.images as string[]) : [],
+    variants: Array.isArray(r.variants) ? (r.variants as Variant[]) : [],
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+function productToRow(p: Partial<Product>): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  if (p.brandId !== undefined) row.brand_id = p.brandId;
+  if (p.categoryId !== undefined) row.category_id = p.categoryId || null;
+  if (p.name !== undefined) row.name = p.name;
+  if (p.slug !== undefined) row.slug = p.slug;
+  if (p.description !== undefined) row.description = p.description;
+  if (p.basePrice !== undefined) row.base_price = p.basePrice;
+  if (p.salePrice !== undefined) row.sale_price = p.salePrice;
+  if (p.status !== undefined) row.status = p.status;
+  if (p.gender !== undefined) row.gender = p.gender;
+  if (p.isNew !== undefined) row.is_new = p.isNew;
+  if (p.isFeatured !== undefined) row.is_featured = p.isFeatured;
+  if (p.tags !== undefined) row.tags = p.tags;
+  if (p.images !== undefined) {
+    row.images = (p.images ?? []).filter((u) => !u.startsWith("blob:"));
+  }
+  if (p.variants !== undefined) row.variants = p.variants ?? [];
+  return row;
+}
+
+type CategoryRow = {
+  id: string; brand_id: string | null;
+  name: string; slug: string; icon: string;
+  order_index: number;
+  created_at: string; updated_at: string;
+};
+
+function rowToCategory(r: CategoryRow): Category {
+  return {
+    id: r.id,
+    brandId: r.brand_id ?? undefined,
+    name: r.name, slug: r.slug,
+    icon: r.icon ?? "🏷️",
+    order: r.order_index,
+    parentId: null, // schema simplificado — sem hierarquia por enquanto
+  };
+}
+
+function categoryToRow(c: Partial<Category>, brandId?: string): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  if (c.name !== undefined) row.name = c.name;
+  if (c.slug !== undefined) row.slug = c.slug;
+  if (c.icon !== undefined) row.icon = c.icon;
+  if (c.order !== undefined) row.order_index = c.order;
+  const bid = c.brandId ?? brandId;
+  if (bid !== undefined) row.brand_id = bid;
+  return row;
 }
 
 // ─── BRAND CACHE ──────────────────────────────────────────────────────────────
@@ -187,28 +301,34 @@ let _brandsCache: Brand[] = [];
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export async function signIn(email: string, password: string): Promise<void> {
-  await signInWithEmailAndPassword(auth, email, password);
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
 }
 
 export async function signOut(): Promise<void> {
-  await fbSignOut(auth);
+  await supabase.auth.signOut();
 }
 
 // ─── BRANDS ───────────────────────────────────────────────────────────────────
 
 export async function getBrands(): Promise<Brand[]> {
-  const snap = await getDocs(collection(db, "brands"));
-  _brandsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Brand);
+  const { data, error } = await supabase
+    .from("brands")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  _brandsCache = (data ?? []).map(rowToBrand);
   return _brandsCache;
 }
 
 export async function getBrandBySlug(slug: string): Promise<Brand | null> {
-  const q = query(collection(db, "brands"), where("slug", "==", slug));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  // Normaliza active: campo ausente em marcas antigas = tratar como ativo
-  return { active: true, id: d.id, ...d.data() } as Brand;
+  const { data, error } = await supabase
+    .from("brands")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToBrand(data) : null;
 }
 
 export function getBrandById(id: string): Brand | undefined {
@@ -217,72 +337,65 @@ export function getBrandById(id: string): Brand | undefined {
 
 export async function saveBrand(
   data: Partial<Brand> & { name: string },
-  adminUid?: string,
+  _adminUid?: string,
 ): Promise<string> {
-  const { id, ...rest } = data as Brand;
-
-  // Nunca salvar blob URLs
-  if (rest.logoUrl) rest.logoUrl = sanitizeImageUrl(rest.logoUrl);
-  if (rest.bannerUrl) rest.bannerUrl = sanitizeImageUrl(rest.bannerUrl);
-
-  const now = serverTimestamp();
+  const { id, ...rest } = data;
+  const row = brandToRow(rest);
 
   if (id) {
-    const payload = cleanForFirestore({ ...rest, updatedAt: now });
-    await setDoc(doc(db, "brands", id), payload, { merge: true });
-    _brandsCache = _brandsCache.map((b) => b.id === id ? { ...b, ...rest, id } : b);
+    const { error } = await supabase.from("brands").update(row).eq("id", id);
+    if (error) throw error;
+    _brandsCache = _brandsCache.map((b) => (b.id === id ? { ...b, ...rest } : b));
     return id;
   }
 
-  const payload = cleanForFirestore({
-    ...rest,
-    active: rest.active !== false,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: adminUid ?? null,
-  });
-  const ref = await addDoc(collection(db, "brands"), payload);
-  _brandsCache = [..._brandsCache, { id: ref.id, ...rest, active: true }];
-  return ref.id;
+  if (row.active === undefined) row.active = true;
+  const { data: inserted, error } = await supabase
+    .from("brands").insert(row).select().single();
+  if (error) throw error;
+  const brand = rowToBrand(inserted);
+  _brandsCache = [..._brandsCache, brand];
+  return brand.id;
 }
 
 export async function deleteBrand(id: string): Promise<void> {
-  await deleteDoc(doc(db, "brands", id));
+  const { error } = await supabase.from("brands").delete().eq("id", id);
+  if (error) throw error;
   _brandsCache = _brandsCache.filter((b) => b.id !== id);
 }
 
 // ─── CATEGORIES ───────────────────────────────────────────────────────────────
 
 export async function getCategories(brandId?: string): Promise<Category[]> {
-  const constraints: any[] = [orderBy("order")];
-  if (brandId) constraints.push(where("brandId", "==", brandId));
-
-  const snap = await getDocs(query(collection(db, "categories"), ...constraints));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Category);
+  let q = supabase.from("categories").select("*").order("order_index");
+  if (brandId) q = q.eq("brand_id", brandId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(rowToCategory);
 }
 
-export async function saveCategory(data: Partial<Category>, brandId?: string): Promise<string> {
-  const { id, ...rest } = data as Category;
-  const payload = cleanForFirestore({
-    ...rest,
-    brandId: rest.brandId ?? brandId ?? null,
-    updatedAt: serverTimestamp(),
-  });
+export async function saveCategory(
+  data: Partial<Category>,
+  brandId?: string,
+): Promise<string> {
+  const { id, ...rest } = data;
+  const row = categoryToRow(rest, brandId);
 
   if (id) {
-    await setDoc(doc(db, "categories", id), payload, { merge: true });
+    const { error } = await supabase.from("categories").update(row).eq("id", id);
+    if (error) throw error;
     return id;
   }
 
-  const ref = await addDoc(collection(db, "categories"), {
-    ...payload,
-    createdAt: serverTimestamp(),
-  });
-  return ref.id;
+  const { data: inserted, error } = await supabase
+    .from("categories").insert(row).select().single();
+  if (error) throw error;
+  return inserted.id;
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  await deleteDoc(doc(db, "categories", id));
+  const { error } = await supabase.from("categories").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
@@ -294,66 +407,57 @@ export async function getProducts(filters?: {
   gender?: string;
   featured?: boolean;
 }): Promise<Product[]> {
-  // brandId e status filtrados no servidor — evita baixar produtos de outras marcas
-  const constraints: any[] = [];
-  if (filters?.brandId) constraints.push(where("brandId", "==", filters.brandId));
-  if (filters?.status)  constraints.push(where("status",  "==", filters.status));
+  let q = supabase.from("products").select("*");
+  if (filters?.brandId)   q = q.eq("brand_id", filters.brandId);
+  if (filters?.status)    q = q.eq("status", filters.status);
+  if (filters?.categoryId) q = q.eq("category_id", filters.categoryId);
+  if (filters?.gender)     q = q.eq("gender", filters.gender);
+  if (filters?.featured)   q = q.eq("is_featured", true);
 
-  const [snap] = await Promise.all([
-    getDocs(query(collection(db, "products"), ...constraints)),
-    getBrands(), // popula _brandsCache para getBrandById() nas páginas admin
-  ]);
+  const [{ data, error }] = await Promise.all([q, getBrands()]);
+  if (error) throw error;
 
-  let products = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
-
-  // categoryId, gender e featured filtrados client-side (conjunto já pequeno)
-  if (filters?.categoryId) products = products.filter((p) => p.categoryId === filters.categoryId);
-  if (filters?.gender)     products = products.filter((p) => p.gender === filters.gender);
-  if (filters?.featured)   products = products.filter((p) => p.isFeatured);
-
+  const products = (data ?? []).map(rowToProduct);
   return products.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | undefined> {
-  const snap = await getDocs(query(collection(db, "products"), where("slug", "==", slug)));
-  if (snap.empty) return undefined;
-  const d = snap.docs[0];
-  return { id: d.id, ...d.data() } as Product;
+  const { data, error } = await supabase
+    .from("products").select("*").eq("slug", slug).maybeSingle();
+  if (error) throw error;
+  return data ? rowToProduct(data) : undefined;
 }
 
 export async function saveProduct(data: Partial<Product>): Promise<string> {
-  const { id, ...rest } = data as Product;
-
-  // Nunca salvar blob URLs nas imagens
-  if (rest.images) {
-    rest.images = rest.images.filter((url) => !url.startsWith("blob:"));
-  }
-
+  const { id, ...rest } = data;
   rest.status = computeProductStatus(rest.variants ?? [], rest.status);
-
-  const now = serverTimestamp();
+  const row = productToRow(rest);
 
   if (id) {
-    const payload = cleanForFirestore({ ...rest, updatedAt: now });
-    await setDoc(doc(db, "products", id), payload, { merge: true });
+    const { error } = await supabase.from("products").update(row).eq("id", id);
+    if (error) throw error;
     return id;
   }
 
-  const payload = cleanForFirestore({ ...rest, createdAt: now, updatedAt: now });
-  const ref = await addDoc(collection(db, "products"), payload);
-  return ref.id;
+  const { data: inserted, error } = await supabase
+    .from("products").insert(row).select().single();
+  if (error) throw error;
+  return inserted.id;
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  await deleteDoc(doc(db, "products", id));
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ─── CLOUDINARY UPLOAD ────────────────────────────────────────────────────────
-// Delega para o cloudinaryService dedicado
 
 export { uploadImageUrl as uploadImage } from "@/services/cloudinaryService";
 
-// ─── STORE SETTINGS (global) ─────────────────────────────────────────────────
+// ─── STORE SETTINGS ──────────────────────────────────────────────────────────
+// Armazenado em configs.settings (jsonb).
+//   configs.brand_id = NULL → settings global ({ store, notifications })
+//   configs.brand_id = X    → settings da marca ({ store })
 
 const defaultStoreSettings: StoreSettings = {
   name: "Catálogo",
@@ -364,80 +468,40 @@ const defaultStoreSettings: StoreSettings = {
   whatsapp: "",
 };
 
+async function fetchConfigRow(brandId?: string) {
+  let q = supabase.from("configs").select("id, settings");
+  q = brandId ? q.eq("brand_id", brandId) : q.is("brand_id", null);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw error;
+  return data as { id: string; settings: Record<string, unknown> } | null;
+}
+
 export async function getStoreSettings(brandId?: string): Promise<StoreSettings> {
-  const docId = brandId ? `store-${brandId}` : "store";
-  const snap = await getDoc(doc(db, "config", docId));
-  if (!snap.exists()) return defaultStoreSettings;
-  return { ...defaultStoreSettings, ...snap.data() } as StoreSettings;
+  const row = await fetchConfigRow(brandId);
+  const stored = (row?.settings?.store ?? {}) as Partial<StoreSettings>;
+  return { ...defaultStoreSettings, ...stored };
 }
 
 export async function saveStoreSettings(data: StoreSettings, brandId?: string): Promise<void> {
-  const docId = brandId ? `store-${brandId}` : "store";
-  // Nunca salvar blob URLs
-  const clean = cleanForFirestore({
-    ...data,
-    logoUrl: sanitizeImageUrl(data.logoUrl),
-    faviconUrl: sanitizeImageUrl(data.faviconUrl),
-    updatedAt: serverTimestamp(),
-  });
-  await setDoc(doc(db, "config", docId), clean);
-}
+  const existing = await fetchConfigRow(brandId);
+  const next = {
+    ...(existing?.settings ?? {}),
+    store: {
+      ...data,
+      logoUrl: sanitizeImageUrl(data.logoUrl),
+      faviconUrl: sanitizeImageUrl(data.faviconUrl),
+    },
+  };
 
-// ─── BANNERS ──────────────────────────────────────────────────────────────────
-
-export async function getBanners(brandId?: string): Promise<Banner[]> {
-  const constraints: any[] = [orderBy("order")];
-  if (brandId) constraints.push(where("brandId", "==", brandId));
-
-  const snap = await getDocs(query(collection(db, "banners"), ...constraints));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Banner);
-}
-
-export async function saveBanner(data: Partial<Banner>): Promise<string> {
-  const { id, ...rest } = data as Banner;
-  // Nunca salvar blob URLs
-  if (rest.imageUrl) rest.imageUrl = sanitizeImageUrl(rest.imageUrl);
-  const clean = cleanForFirestore({ ...rest, updatedAt: serverTimestamp() });
-
-  if (id) {
-    await setDoc(doc(db, "banners", id), clean, { merge: true });
-    return id;
+  if (existing) {
+    const { error } = await supabase
+      .from("configs").update({ settings: next }).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("configs").insert({ brand_id: brandId ?? null, settings: next });
+    if (error) throw error;
   }
-  const ref = await addDoc(collection(db, "banners"), {
-    ...clean,
-    createdAt: serverTimestamp(),
-  });
-  return ref.id;
-}
-
-export async function deleteBanner(id: string): Promise<void> {
-  await deleteDoc(doc(db, "banners", id));
-}
-
-// ─── VENDORS ──────────────────────────────────────────────────────────────────
-
-export async function getVendors(): Promise<Vendor[]> {
-  const snap = await getDocs(collection(db, "vendors"));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Vendor);
-}
-
-export async function saveVendor(data: Partial<Vendor>): Promise<string> {
-  const { id, ...rest } = data as Vendor;
-  const clean = cleanForFirestore({ ...rest, updatedAt: serverTimestamp() });
-
-  if (id) {
-    await setDoc(doc(db, "vendors", id), clean, { merge: true });
-    return id;
-  }
-  const ref = await addDoc(collection(db, "vendors"), {
-    ...clean,
-    createdAt: serverTimestamp(),
-  });
-  return ref.id;
-}
-
-export async function deleteVendor(id: string): Promise<void> {
-  await deleteDoc(doc(db, "vendors", id));
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -451,14 +515,51 @@ const defaultNotifications: NotificationSettings = {
 };
 
 export async function getNotificationSettings(): Promise<NotificationSettings> {
-  const snap = await getDoc(doc(db, "config", "notifications"));
-  if (!snap.exists()) return defaultNotifications;
-  return { ...defaultNotifications, ...snap.data() } as NotificationSettings;
+  const row = await fetchConfigRow();
+  const stored = (row?.settings?.notifications ?? {}) as Partial<NotificationSettings>;
+  return { ...defaultNotifications, ...stored };
 }
 
 export async function saveNotificationSettings(data: NotificationSettings): Promise<void> {
-  await setDoc(doc(db, "config", "notifications"), {
-    ...data,
-    updatedAt: serverTimestamp(),
-  });
+  const existing = await fetchConfigRow();
+  const next = { ...(existing?.settings ?? {}), notifications: data };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("configs").update({ settings: next }).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("configs").insert({ brand_id: null, settings: next });
+    if (error) throw error;
+  }
+}
+
+// ─── BANNERS (stub — feature suspensa) ────────────────────────────────────────
+// Schema atual não inclui banners. UI fica funcional mostrando "Nenhum banner".
+
+export async function getBanners(_brandId?: string): Promise<Banner[]> {
+  return [];
+}
+
+export async function saveBanner(_data: Partial<Banner>): Promise<string> {
+  throw new Error("Banners temporariamente desabilitados nesta versão.");
+}
+
+export async function deleteBanner(_id: string): Promise<void> {
+  throw new Error("Banners temporariamente desabilitados nesta versão.");
+}
+
+// ─── VENDORS (stub — feature suspensa) ────────────────────────────────────────
+
+export async function getVendors(): Promise<Vendor[]> {
+  return [];
+}
+
+export async function saveVendor(_data: Partial<Vendor>): Promise<string> {
+  throw new Error("Vendedores temporariamente desabilitados nesta versão.");
+}
+
+export async function deleteVendor(_id: string): Promise<void> {
+  throw new Error("Vendedores temporariamente desabilitados nesta versão.");
 }
