@@ -88,11 +88,12 @@ function AdminLayout() {
   ];
 
   const bottomNav: NavItem[] = [
-    { to: "/admin/configuracoes", label: "Configurações", icon: Settings2 },
+    { to: "/admin/configuracoes", label: "Configurações", icon: Settings2, adminOnly: true },
   ];
 
   // Filtra itens adminOnly para clientes
   const visibleNav = nav.filter((n) => !n.adminOnly || isAdmin);
+  const visibleBottomNav = bottomNav.filter((n) => !n.adminOnly || isAdmin);
 
   const width = collapsed ? "w-16" : "w-60";
 
@@ -122,7 +123,7 @@ function AdminLayout() {
           ))}
         </nav>
         <div className="border-t border-border p-3">
-          {bottomNav.map((n) => (
+          {visibleBottomNav.map((n) => (
             <NavLink key={n.to} item={n} pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
@@ -147,7 +148,7 @@ function AdminLayout() {
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background md:hidden">
-        {[...visibleNav, ...bottomNav].map((n) => {
+        {[...visibleNav, ...visibleBottomNav].map((n) => {
           const active = n.exact ? pathname === n.to : pathname.startsWith(n.to);
           return (
             <Link key={n.to} to={n.to} className={`relative flex-1 flex flex-col items-center gap-1 py-3 text-[10px] uppercase tracking-widest ${active ? "text-foreground" : "text-muted-foreground"}`}>

@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Upload, Plus, Pencil, Trash2, GripVertical, Image as ImageIcon, X } from "lucide-react";
 import {
   getStoreSettings, saveStoreSettings, type StoreSettings,
@@ -24,7 +25,15 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminSettings() {
+  const { isAdmin, loading } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("identidade");
+
+  useEffect(() => {
+    if (!loading && !isAdmin) navigate({ to: "/admin", replace: true });
+  }, [isAdmin, loading, navigate]);
+
+  if (loading || !isAdmin) return null;
 
   return (
     <div className="mx-auto max-w-5xl p-6 md:p-10 fade-in">
