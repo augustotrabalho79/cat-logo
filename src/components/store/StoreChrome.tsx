@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Heart, Search } from "lucide-react";
-import { useWishlist } from "@/hooks/use-wishlist";
+import { Search } from "lucide-react";
 
 const navItems = [
   { to: "/produtos", label: "Produtos" },
@@ -9,8 +8,6 @@ const navItems = [
 ] as const;
 
 export function StoreHeader() {
-  const { count } = useWishlist();
-
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6">
@@ -35,14 +32,6 @@ export function StoreHeader() {
           <button aria-label="Buscar" className="p-1 text-foreground hover:opacity-70">
             <Search className="h-5 w-5" strokeWidth={1.5} />
           </button>
-          <Link to="/produtos" aria-label="Wishlist" className="relative p-1 text-foreground hover:opacity-70">
-            <Heart className="h-5 w-5" strokeWidth={1.5} />
-            {count > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center bg-foreground px-1 text-[10px] font-medium text-background">
-                {count}
-              </span>
-            )}
-          </Link>
         </div>
       </div>
 

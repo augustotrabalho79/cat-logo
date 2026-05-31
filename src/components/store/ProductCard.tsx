@@ -1,12 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Heart } from "lucide-react";
 import { type Product, getBrandById, formatBRL } from "@/lib/api";
-import { useWishlist } from "@/hooks/use-wishlist";
 
 export function ProductCard({ product }: { product: Product }) {
   const brand = getBrandById(product.brandId);
-  const { has, toggle } = useWishlist();
-  const wished = has(product.id);
   const isSold = product.status === "esgotado";
   const onSale = product.salePrice != null;
 
@@ -38,21 +34,6 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
 
-        <button
-          type="button"
-          aria-label="Adicionar à wishlist"
-          onClick={(e) => {
-            e.preventDefault();
-            toggle(product.id);
-          }}
-          className="absolute right-3 top-3 p-2 text-foreground transition hover:scale-110"
-        >
-          <Heart
-            className="h-5 w-5"
-            strokeWidth={1.5}
-            fill={wished ? "currentColor" : "none"}
-          />
-        </button>
       </div>
 
       <div className="mt-3 space-y-1">

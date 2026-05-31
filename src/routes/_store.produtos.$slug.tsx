@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Heart, Ruler, X } from "lucide-react";
+import { Ruler, X } from "lucide-react";
 import { getProductBySlug, getProducts, getBrandById, formatBRL, type Product } from "@/lib/api";
-import { useWishlist } from "@/hooks/use-wishlist";
 import { ProductCard } from "@/components/store/ProductCard";
 
 export const Route = createFileRoute("/_store/produtos/$slug")({
@@ -17,8 +16,6 @@ function ProductDetail() {
   const [color, setColor] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
   const [sizeGuide, setSizeGuide] = useState(false);
-  const { has, toggle } = useWishlist();
-
   useEffect(() => {
     getProductBySlug(slug).then((p) => {
       if (!p) return;
@@ -44,7 +41,6 @@ function ProductDetail() {
   }
 
   const brand = getBrandById(product.brandId);
-  const wished = has(product.id);
   const uniqColors = Array.from(new Map((product.variants ?? []).map((v) => [v.color, v])).values());
   const thumbs = [brand?.secondaryColor ?? "#e6e4dd", brand?.primaryColor ?? "#0f0f0f", "#d9c7a3", "#fafaf7"];
 
@@ -137,14 +133,6 @@ function ProductDetail() {
                 })}
               </div>
             </div>
-
-            <button
-              onClick={() => toggle(product.id)}
-              className="label-btn mt-8 flex w-full items-center justify-center gap-2 border border-foreground py-4 text-foreground transition hover:bg-foreground hover:text-background"
-            >
-              <Heart className="h-4 w-4" strokeWidth={1.5} fill={wished ? "currentColor" : "none"} />
-              {wished ? "Salvo na wishlist" : "Adicionar à wishlist"}
-            </button>
 
             <div className="my-10 border-t border-border" />
 
