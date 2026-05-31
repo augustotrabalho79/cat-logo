@@ -530,7 +530,7 @@ function UploadArea({
         {uploading ? (
           <>
             <div className="h-5 w-5 animate-spin border-2 border-border border-t-foreground" />
-            <span>Enviando para Cloudinary…</span>
+            <span>Enviando imagem…</span>
           </>
         ) : preview ? (
           <img src={preview} alt="" className="max-h-full max-w-full object-contain p-2" />

@@ -450,9 +450,9 @@ export async function deleteProduct(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ─── CLOUDINARY UPLOAD ────────────────────────────────────────────────────────
+// ─── IMAGE UPLOAD (Supabase Storage) ──────────────────────────────────────────
 
-export { uploadImageUrl as uploadImage } from "@/services/cloudinaryService";
+export { uploadImageUrl as uploadImage } from "@/services/storageService";
 
 // ─── STORE SETTINGS ──────────────────────────────────────────────────────────
 // Armazenado em configs.settings (jsonb).
