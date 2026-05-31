@@ -350,7 +350,7 @@ As cores são CSS custom properties injetadas na div raiz. O catálogo aplica as
 **Variáveis de ambiente corretas (Vercel + .env):**
 ```
 VITE_CLOUDINARY_CLOUD_NAME=doitolog3
-VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_moda_unsigned
+VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_unsigned
 ```
 
 **NÃO existe mais `VITE_CLOUDINARY_API_KEY`.** Remover se aparecer.
@@ -391,10 +391,10 @@ https://res.cloudinary.com/doitolog3/image/upload/v1234567/public_id.jpg
 - `sanitizeImageUrl()` em `api.ts` rejeita qualquer blob: URL automaticamente
 
 ### Configuração no painel Cloudinary
-O preset `catalogo_moda_unsigned` DEVE estar em modo **Unsigned** no dashboard:
+O preset `catalogo_unsigned` DEVE estar em modo **Unsigned** no dashboard:
 ```
 Cloudinary Dashboard → Settings → Upload → Upload presets
-→ catalogo_moda_unsigned → Signing mode: Unsigned
+→ catalogo_unsigned → Signing mode: Unsigned
 ```
 Se estiver como "Signed", o upload retorna 401 "Upload preset must be whitelisted for unsigned uploads".
 
@@ -713,7 +713,7 @@ O número é formatado por `formatWhatsAppPhone()` que adiciona `55` se necessá
 
 1. **Cloudinary preset não está em modo Unsigned**
    - Sintoma: `401 Upload preset must be whitelisted for unsigned uploads`
-   - Solução: Cloudinary Dashboard → Settings → Upload presets → `catalogo_moda_unsigned` → Signing mode: **Unsigned**
+   - Solução: Cloudinary Dashboard → Settings → Upload presets → `catalogo_unsigned` → Signing mode: **Unsigned**
    - Sem isso: upload de imagens falha
 
 2. **Usuário admin no Firebase Auth não criado**
@@ -867,7 +867,7 @@ Quando o usuário trouxer ZIP novo do Lovable:
 ### 🔴 Alta prioridade (bloqueadores)
 
 - [ ] **Verificar/criar usuário `augustocross87@gmail.com`** no Firebase Auth do projeto `catalogo-69b3a`
-- [ ] **Configurar preset `catalogo_moda_unsigned` como Unsigned** no Cloudinary
+- [ ] **Configurar preset `catalogo_unsigned` como Unsigned** no Cloudinary
 - [ ] **Testar fluxo completo end-to-end** em produção após fixes acima
 - [ ] **Criar marca e produto de teste** para validar catálogo público
 
@@ -923,7 +923,7 @@ VITE_FIREBASE_STORAGE_BUCKET=catalogo-69b3a.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=914185303194
 VITE_FIREBASE_APP_ID=1:914185303194:web:6fcc08a3e49f29ffeedb23
 VITE_CLOUDINARY_CLOUD_NAME=doitolog3
-VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_moda_unsigned
+VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_unsigned
 ```
 
 ### Comandos úteis

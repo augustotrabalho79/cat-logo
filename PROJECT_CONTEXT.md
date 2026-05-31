@@ -34,7 +34,7 @@ para gerenciar produtos, categorias, banners e configurações da sua marca.
 
 ### Cloudinary
 - **Cloud name:** `doitolog3`
-- **Upload preset:** `catalogo_moda_unsigned` (deve estar em modo **Unsigned**)
+- **Upload preset:** `catalogo_unsigned` (deve estar em modo **Unsigned**)
 - **Tamanho máximo:** 15MB por imagem
 - **Atenção:** Upload usa apenas `file` + `upload_preset` — sem api_key, sem signature
 
@@ -47,7 +47,7 @@ VITE_FIREBASE_STORAGE_BUCKET=catalogo-69b3a.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=914185303194
 VITE_FIREBASE_APP_ID=1:914185303194:web:6fcc08a3e49f29ffeedb23
 VITE_CLOUDINARY_CLOUD_NAME=doitolog3
-VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_moda_unsigned
+VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_unsigned
 ```
 
 ---

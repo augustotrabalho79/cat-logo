@@ -15,7 +15,7 @@ Olá! Vamos continuar o desenvolvimento do meu catálogo de moda. Aqui está o c
 ## Stack
 - React + TypeScript + Vite + TanStack Router (SPA puro, sem SSR)
 - Firebase Auth + Firestore (banco de dados)
-- Cloudinary para upload de imagens (cloud: `doitolog3`, preset: `catalogo_moda_unsigned` — deve estar em modo Unsigned)
+- Cloudinary para upload de imagens (cloud: `doitolog3`, preset: `catalogo_unsigned` — deve estar em modo Unsigned)
 - Vercel para deploy (com `vercel.json` de rewrites SPA)
 
 ## Estrutura de pastas importantes
@@ -69,7 +69,7 @@ VITE_FIREBASE_STORAGE_BUCKET=catalogo-69b3a.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=914185303194
 VITE_FIREBASE_APP_ID=1:914185303194:web:6fcc08a3e49f29ffeedb23
 VITE_CLOUDINARY_CLOUD_NAME=doitolog3
-VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_moda_unsigned
+VITE_CLOUDINARY_UPLOAD_PRESET=catalogo_unsigned
 ```
 
 ## Comando de deploy
