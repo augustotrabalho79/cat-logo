@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { getCategories, saveCategory, deleteCategory, type Category } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { SlideOver } from "@/components/SlideOver";
 import { Btn, Field, TextInput, Select } from "@/components/ui-prim";
 
@@ -13,12 +14,18 @@ const slugify = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 function AdminCategorias() {
+  const { user, isAdmin, loading } = useAuth();
   const [cats, setCats] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [form, setForm] = useState({ name: "", slug: "", icon: "🏷️", parentId: "", order: 1 });
 
-  useEffect(() => { getCategories().then(setCats); }, []);
+  const brandId = isAdmin ? undefined : user?.brandId || undefined;
+
+  useEffect(() => {
+    if (loading) return;
+    getCategories(brandId).then(setCats);
+  }, [user, isAdmin, loading]);
 
   function openNew() {
     setEditing(null);
@@ -31,7 +38,9 @@ function AdminCategorias() {
     setOpen(true);
   }
   async function onSave() {
-    await saveCategory({ ...form, id: editing?.id, parentId: form.parentId || null });
+    await saveCategory({ ...form, id: editing?.id, parentId: form.parentId || null }, brandId);
+    const updated = await getCategories(brandId);
+    setCats(updated);
     setOpen(false);
   }
   async function onDelete(id: string) {
